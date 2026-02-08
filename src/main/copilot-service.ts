@@ -1,4 +1,7 @@
-import { CopilotClient, type CopilotSession } from '@github/copilot-sdk';
+// Dynamic import to load ESM SDK in Electron's CJS main process
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+type CopilotClientType = import('@github/copilot-sdk').CopilotClient;
+type CopilotSessionType = import('@github/copilot-sdk').CopilotSession;
 
 // CopilotEvent union type (renderer-facing)
 export type CopilotEvent =
@@ -10,15 +13,17 @@ export type CopilotEvent =
 
 export type EventCallback = (event: CopilotEvent) => void;
 
+async function loadSDK(): Promise<typeof import('@github/copilot-sdk')> {
+  return import('@github/copilot-sdk');
+}
+
 export class CopilotService {
   private static instance: CopilotService;
-  private client: CopilotClient;
-  private session: CopilotSession | null = null;
+  private client: CopilotClientType | null = null;
+  private session: CopilotSessionType | null = null;
   private started = false;
 
-  private constructor() {
-    this.client = new CopilotClient({ autoStart: false });
-  }
+  private constructor() {}
 
   static getInstance(): CopilotService {
     if (!CopilotService.instance) {
@@ -29,15 +34,17 @@ export class CopilotService {
 
   async ensureStarted(): Promise<void> {
     if (!this.started) {
+      const { CopilotClient } = await loadSDK();
+      this.client = new CopilotClient({ autoStart: false });
       await this.client.start();
       this.started = true;
     }
   }
 
-  async ensureSession(): Promise<CopilotSession> {
+  async ensureSession(): Promise<CopilotSessionType> {
     await this.ensureStarted();
     if (!this.session) {
-      this.session = await this.client.createSession({
+      this.session = await this.client!.createSession({
         model: 'gpt-4.1',
         streaming: true,
       });
@@ -102,7 +109,7 @@ export class CopilotService {
       await this.session.destroy();
       this.session = null;
     }
-    if (this.started) {
+    if (this.started && this.client) {
       await this.client.stop();
       this.started = false;
     }
