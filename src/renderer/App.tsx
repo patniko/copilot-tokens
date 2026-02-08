@@ -8,6 +8,8 @@ import Settings from './components/Settings';
 import ReelArea from './components/ReelArea';
 import CommitButton from './components/CommitButton';
 import MilestoneOverlay from './components/MilestoneOverlay';
+import PermissionDialog from './components/PermissionDialog';
+import type { PermissionRequestData } from './components/PermissionDialog';
 import { useMilestones } from './hooks/useMilestones';
 
 export default function App() {
@@ -35,6 +37,21 @@ export default function App() {
     latestStatsRef.current = null;
     sessionStartRef.current = null;
     setResetKey((k) => k + 1);
+  }, []);
+
+  // Permission request state
+  const [permissionRequest, setPermissionRequest] = useState<PermissionRequestData | null>(null);
+
+  useEffect(() => {
+    if (!window.copilotAPI?.onPermissionRequest) return;
+    return window.copilotAPI.onPermissionRequest((request) => {
+      setPermissionRequest(request as PermissionRequestData);
+    });
+  }, []);
+
+  const handlePermissionRespond = useCallback((approved: boolean) => {
+    window.copilotAPI?.respondPermission(approved);
+    setPermissionRequest(null);
   }, []);
 
   // Load CWD + git info + model on mount
@@ -243,6 +260,7 @@ export default function App() {
         <Leaderboard isOpen={leaderboardOpen} onClose={() => setLeaderboardOpen(false)} />
         <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onCwdChange={refreshGitInfo} onModelChange={setCurrentModel} />
         <MilestoneOverlay milestone={activeMilestone} onComplete={dismissMilestone} />
+        <PermissionDialog request={permissionRequest} onRespond={handlePermissionRespond} />
       </div>
     </ThemeProvider>
   );

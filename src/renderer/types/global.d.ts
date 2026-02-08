@@ -4,6 +4,8 @@ interface CopilotAPI {
   sendMessage(prompt: string, attachments?: { path: string }[]): void;
   abort(): void;
   onEvent(callback: (event: unknown) => void): () => void;
+  onPermissionRequest(callback: (request: unknown) => void): () => void;
+  respondPermission(approved: boolean): void;
 }
 
 interface StatsAPI {

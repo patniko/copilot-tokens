@@ -33,6 +33,9 @@ export class CopilotService {
   private workingDirectory: string | undefined;
   private model: string = 'claude-sonnet-4';
 
+  // Permission handler set by the IPC layer
+  private permissionCallback: ((request: Record<string, unknown>) => Promise<boolean>) | null = null;
+
   private constructor() {}
 
   static getInstance(): CopilotService {
@@ -66,6 +69,10 @@ export class CopilotService {
     return this.model;
   }
 
+  setPermissionHandler(handler: (request: Record<string, unknown>) => Promise<boolean>): void {
+    this.permissionCallback = handler;
+  }
+
   async listModels(): Promise<{ id: string; name: string }[]> {
     await this.ensureStarted();
     const models = await this.client!.listModels();
@@ -91,15 +98,27 @@ export class CopilotService {
       if (this.workingDirectory) {
         opts.workingDirectory = this.workingDirectory;
       }
+      if (this.permissionCallback) {
+        const cb = this.permissionCallback;
+        opts.onPermissionRequest = async (request: Record<string, unknown>) => {
+          const approved = await cb(request);
+          return {
+            kind: approved ? 'approved' : 'denied-interactively-by-user',
+          };
+        };
+      }
       this.session = await this.client!.createSession(opts as Parameters<CopilotClientType['createSession']>[0]);
     }
     return this.session;
   }
 
+  private abortResolve: (() => void) | null = null;
+
   async sendMessage(prompt: string, onEvent: EventCallback, attachments?: { path: string }[]): Promise<void> {
     const session = await this.ensureSession();
 
     const done = new Promise<void>((resolve) => {
+      this.abortResolve = resolve;
       const unsub = session.on((event) => {
         switch (event.type) {
           case 'assistant.message_delta':
@@ -207,6 +226,7 @@ export class CopilotService {
           case 'session.idle':
             onEvent({ type: 'session.idle' });
             unsub();
+            this.abortResolve = null;
             resolve();
             break;
         }
@@ -224,6 +244,11 @@ export class CopilotService {
   async abort(): Promise<void> {
     if (this.session) {
       await this.session.abort();
+    }
+    // Resolve any pending sendMessage promise
+    if (this.abortResolve) {
+      this.abortResolve();
+      this.abortResolve = null;
     }
   }
 

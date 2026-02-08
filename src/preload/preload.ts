@@ -16,6 +16,18 @@ contextBridge.exposeInMainWorld('copilotAPI', {
       ipcRenderer.removeListener('copilot:event', listener);
     };
   },
+  onPermissionRequest(callback: (request: unknown) => void): () => void {
+    const listener = (_ipcEvent: Electron.IpcRendererEvent, request: unknown) => {
+      callback(request);
+    };
+    ipcRenderer.on('copilot:permissionRequest', listener);
+    return () => {
+      ipcRenderer.removeListener('copilot:permissionRequest', listener);
+    };
+  },
+  respondPermission(approved: boolean): void {
+    ipcRenderer.invoke('copilot:permissionResponse', approved);
+  },
 });
 
 contextBridge.exposeInMainWorld('statsAPI', {

@@ -37,6 +37,23 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     copilot.setModel(savedModel);
   }
 
+  // Permission bridge: main → renderer → main
+  let pendingPermission: { resolve: (approved: boolean) => void } | null = null;
+
+  copilot.setPermissionHandler(async (request) => {
+    return new Promise<boolean>((resolve) => {
+      pendingPermission = { resolve };
+      mainWindow.webContents.send('copilot:permissionRequest', request);
+    });
+  });
+
+  ipcMain.handle('copilot:permissionResponse', (_event, approved: boolean) => {
+    if (pendingPermission) {
+      pendingPermission.resolve(approved);
+      pendingPermission = null;
+    }
+  });
+
   ipcMain.handle('copilot:sendMessage', async (_event, prompt: string, attachments?: { path: string }[]) => {
     try {
       await copilot.sendMessage(prompt, (event) => {
@@ -50,6 +67,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('copilot:abort', async () => {
     await copilot.abort();
+    mainWindow.webContents.send('copilot:event', { type: 'session.idle' });
   });
 
   ipcMain.handle('stats:getTopSessions', (_event, limit: number) => {
