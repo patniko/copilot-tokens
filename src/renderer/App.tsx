@@ -457,6 +457,14 @@ export default function App() {
             {cwd && (
               <>
                 <button
+                  onClick={() => window.utilAPI?.openFolder(cwd)}
+                  className="px-2 py-0.5 rounded text-[var(--text-secondary)] hover:text-[var(--accent-gold)] hover:bg-[var(--accent-gold)]/10 transition-colors cursor-pointer flex items-center gap-1"
+                  title="Open in Finder"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                  <span className="text-[10px]">Folder</span>
+                </button>
+                <button
                   onClick={() => window.utilAPI?.openInVSCode(cwd)}
                   className="px-2 py-0.5 rounded text-[var(--text-secondary)] hover:text-[var(--accent-blue)] hover:bg-[var(--accent-blue)]/10 transition-colors cursor-pointer flex items-center gap-1"
                   title="Open in VS Code"

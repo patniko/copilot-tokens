@@ -299,6 +299,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (dir) execFile('code', [dir], { env: process.env });
   });
 
+  ipcMain.handle('util:openFolder', (_event, dir: string) => {
+    if (dir) shell.openPath(dir);
+  });
+
   ipcMain.handle('util:openCopilotShell', (_event, dir: string) => {
     if (!dir) return;
     const script = `tell application "Terminal" to do script "cd ${dir.replace(/"/g, '\\"')} && copilot"`;

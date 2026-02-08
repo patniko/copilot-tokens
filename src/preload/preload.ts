@@ -119,6 +119,9 @@ contextBridge.exposeInMainWorld('utilAPI', {
   openInVSCode(dir: string): void {
     ipcRenderer.invoke('util:openInVSCode', dir);
   },
+  openFolder(dir: string): void {
+    ipcRenderer.invoke('util:openFolder', dir);
+  },
   openCopilotShell(dir: string): void {
     ipcRenderer.invoke('util:openCopilotShell', dir);
   },
