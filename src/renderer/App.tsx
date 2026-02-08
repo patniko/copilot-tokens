@@ -126,12 +126,7 @@ export default function App() {
         setGitBranch(info.isRepo ? (info.branch ?? null) : null);
       });
       window.cwdAPI.gitStats(dir).then((stats) => {
-        if (stats.files.length > 0) {
-          setChangedFiles((prev) => {
-            const merged = new Set([...prev, ...stats.files]);
-            return [...merged];
-          });
-        }
+        setChangedFiles(stats.files);
       });
     }
   }, []);
@@ -336,16 +331,6 @@ export default function App() {
                   {availableModels.length === 0 && (
                     <div className="px-3 py-2 text-xs text-[var(--text-secondary)]">Loading…</div>
                   )}
-                  <button
-                    onClick={() => {
-                      window.modelAPI?.refresh().then((models) => {
-                        setAvailableModels(models);
-                      }).catch(() => {});
-                    }}
-                    className="w-full text-left px-3 py-2 text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer border-t border-[var(--border-color)] flex items-center gap-1.5"
-                  >
-                    🔄 Refresh models
-                  </button>
                 </div>
               </>
             )}

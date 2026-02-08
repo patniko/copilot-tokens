@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { useSound } from '../hooks/useSound';
+import DiffViewer from './DiffViewer';
 
 interface CommitButtonProps {
   changedFiles: string[];
@@ -68,7 +69,6 @@ function CommitModal({ changedFiles, onClose, onSendFeedback }: CommitModalProps
   const [errorMsg, setErrorMsg] = useState('');
   const [diffContent, setDiffContent] = useState('');
   const [diffLoading, setDiffLoading] = useState(false);
-  const [feedback, setFeedback] = useState('');
   const closingRef = useRef(false);
 
   // Reel animation: lock files one by one
@@ -139,7 +139,7 @@ function CommitModal({ changedFiles, onClose, onSendFeedback }: CommitModalProps
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.5, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-        className="glass-card p-6 w-full max-w-[700px] flex flex-col gap-4"
+        className={`glass-card p-6 flex flex-col gap-4 ${step === 'diff' ? 'w-full h-full max-w-none max-h-none m-4 rounded-xl' : 'w-full max-w-[700px]'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-[var(--accent-gold)] text-center tracking-wider">
@@ -250,71 +250,18 @@ function CommitModal({ changedFiles, onClose, onSendFeedback }: CommitModalProps
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col gap-3"
+            className="flex flex-col gap-3 flex-1 min-h-0"
           >
             {diffLoading ? (
               <div className="flex items-center justify-center py-8 text-sm text-[var(--text-secondary)]">
                 Loading diff…
               </div>
             ) : (
-              <pre
-                className="text-xs font-mono overflow-auto rounded-lg p-3 max-h-[50vh]"
-                style={{ backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)' }}
-              >
-                {diffContent.split('\n').map((line, i) => {
-                  let color = 'var(--text-secondary)';
-                  let bg = 'transparent';
-                  if (line.startsWith('+') && !line.startsWith('+++')) {
-                    color = 'var(--accent-green)';
-                    bg = 'rgba(63,185,80,0.08)';
-                  } else if (line.startsWith('-') && !line.startsWith('---')) {
-                    color = 'var(--accent-red)';
-                    bg = 'rgba(248,81,73,0.08)';
-                  } else if (line.startsWith('@@')) {
-                    color = 'var(--accent-purple)';
-                  } else if (line.startsWith('diff ') || line.startsWith('index ')) {
-                    color = 'var(--text-secondary)';
-                  }
-                  return (
-                    <div key={i} style={{ color, backgroundColor: bg }}>{line || ' '}</div>
-                  );
-                })}
-              </pre>
-            )}
-
-            {/* Feedback textarea */}
-            {onSendFeedback && (
-              <div className="flex gap-2">
-                <input
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  placeholder="Send feedback to chat…"
-                  className="flex-1 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2"
-                  style={{
-                    backgroundColor: 'var(--bg-primary)',
-                    border: '1px solid var(--border-color)',
-                    color: 'var(--text-primary)',
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && feedback.trim()) {
-                      onSendFeedback(feedback.trim());
-                      onClose();
-                    }
-                  }}
+              <div className="flex-1 min-h-0 overflow-auto rounded-lg">
+                <DiffViewer
+                  diffText={diffContent}
+                  onComment={onSendFeedback ? (comment) => { onSendFeedback(comment); onClose(); } : undefined}
                 />
-                <button
-                  onClick={() => {
-                    if (feedback.trim()) {
-                      onSendFeedback(feedback.trim());
-                      onClose();
-                    }
-                  }}
-                  disabled={!feedback.trim()}
-                  className="px-3 py-2 rounded-lg text-sm font-bold cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-40"
-                  style={{ backgroundColor: 'var(--accent-purple)', color: 'white' }}
-                >
-                  Send
-                </button>
               </div>
             )}
 

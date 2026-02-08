@@ -181,3 +181,51 @@ body {
   75% { opacity: 0.7; transform: scale(0.85) translateY(8px); }
   100% { opacity: 0; transform: scale(0.7) translateY(20px); }
 }
+
+/* react-diff-view dark theme overrides */
+.diff-viewer-container .diff {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+}
+.diff-viewer-container .diff-gutter {
+  background: rgba(255,255,255,0.02);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  min-width: 3em;
+  padding: 0 6px;
+  text-align: right;
+  opacity: 0.5;
+}
+.diff-viewer-container .diff-gutter:hover {
+  opacity: 1;
+  background: rgba(168,85,247,0.15);
+  color: var(--accent-purple);
+}
+.diff-viewer-container .diff-line {
+  border: none;
+}
+.diff-viewer-container .diff-code {
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diff-viewer-container .diff-code-insert {
+  background: rgba(63,185,80,0.1);
+  color: var(--accent-green);
+}
+.diff-viewer-container .diff-code-delete {
+  background: rgba(248,81,73,0.1);
+  color: var(--accent-red);
+}
+.diff-viewer-container .diff-code-normal {
+  color: var(--text-secondary);
+}
+.diff-viewer-container .diff-gutter-insert {
+  background: rgba(63,185,80,0.15);
+}
+.diff-viewer-container .diff-gutter-delete {
+  background: rgba(248,81,73,0.15);
+}
