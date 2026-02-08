@@ -3,20 +3,9 @@ import type { Milestone } from '../lib/milestones';
 import { checkMilestones } from '../lib/milestones';
 import type { DashboardStats } from '../components/TokenDashboard';
 
-const EMPTY_STATS: DashboardStats = {
-  inputTokens: 0,
-  outputTokens: 0,
-  realOutputTokens: 0,
-  filesChanged: 0,
-  linesAdded: 0,
-  linesRemoved: 0,
-  messagesCount: 0,
-  toolCalls: 0,
-};
-
 export function useMilestones() {
   const [activeMilestone, setActiveMilestone] = useState<Milestone | null>(null);
-  const previousStatsRef = useRef<DashboardStats>(EMPTY_STATS);
+  const previousStatsRef = useRef<DashboardStats | null>(null);
   const queueRef = useRef<Milestone[]>([]);
   const firedRef = useRef<Set<string>>(new Set());
 
@@ -34,6 +23,11 @@ export function useMilestones() {
 
   const checkStats = useCallback(
     (currentStats: DashboardStats) => {
+      // First call is the baseline — don't trigger milestones for pre-existing stats
+      if (previousStatsRef.current === null) {
+        previousStatsRef.current = currentStats;
+        return;
+      }
       const triggered = checkMilestones(currentStats, previousStatsRef.current)
         .filter((m) => !firedRef.current.has(m.id));
       previousStatsRef.current = currentStats;
