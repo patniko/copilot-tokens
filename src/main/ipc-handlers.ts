@@ -4,6 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CopilotService } from './copilot-service';
 import { StatsService, SessionStats } from './stats-service';
+import { PermissionService } from './permission-service';
 
 function parseNumstat(stdout: string): { filesChanged: number; linesAdded: number; linesRemoved: number; files: string[] } {
   const lines = stdout.trim().split('\n').filter(Boolean);
@@ -38,20 +39,43 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   }
 
   // Permission bridge: main → renderer → main
-  let pendingPermission: { resolve: (approved: boolean) => void } | null = null;
+  const permissions = new PermissionService();
+  let pendingPermission: { resolve: (decision: 'allow' | 'deny' | 'always') => void } | null = null;
 
   copilot.setPermissionHandler(async (request) => {
-    return new Promise<boolean>((resolve) => {
+    const cwd = stats.getCwd();
+    const evalResult = permissions.evaluate(request, cwd);
+    if (evalResult === 'allow') return 'allow';
+
+    // Need to ask user
+    return new Promise<'allow' | 'deny' | 'always'>((resolve) => {
       pendingPermission = { resolve };
-      mainWindow.webContents.send('copilot:permissionRequest', request);
+      mainWindow.webContents.send('copilot:permissionRequest', { ...request, cwd });
     });
   });
 
-  ipcMain.handle('copilot:permissionResponse', (_event, approved: boolean) => {
+  ipcMain.handle('copilot:permissionResponse', (_event, decision: 'allow' | 'deny' | 'always') => {
     if (pendingPermission) {
-      pendingPermission.resolve(approved);
+      pendingPermission.resolve(decision);
       pendingPermission = null;
     }
+  });
+
+  // Called by renderer when user clicks "Always Allow" — persists the rule
+  ipcMain.handle('copilot:addPermissionRule', (_event, kind: string, pathPrefix: string) => {
+    permissions.addRule({ kind, pathPrefix });
+  });
+
+  ipcMain.handle('copilot:getPermissionRules', () => {
+    return permissions.getRules();
+  });
+
+  ipcMain.handle('copilot:removePermissionRule', (_event, index: number) => {
+    permissions.removeRule(index);
+  });
+
+  ipcMain.handle('copilot:clearPermissionRules', () => {
+    permissions.clearRules();
   });
 
   ipcMain.handle('copilot:sendMessage', async (_event, prompt: string, attachments?: { path: string }[]) => {

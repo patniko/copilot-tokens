@@ -9,7 +9,7 @@ import ReelArea from './components/ReelArea';
 import CommitButton from './components/CommitButton';
 import MilestoneOverlay from './components/MilestoneOverlay';
 import PermissionDialog from './components/PermissionDialog';
-import type { PermissionRequestData } from './components/PermissionDialog';
+import type { PermissionRequestData, PermissionDecision } from './components/PermissionDialog';
 import { useMilestones } from './hooks/useMilestones';
 
 export default function App() {
@@ -21,6 +21,8 @@ export default function App() {
   const [cwd, setCwd] = useState('');
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const [currentModel, setCurrentModel] = useState('claude-sonnet-4');
+  const [availableModels, setAvailableModels] = useState<{ id: string; name: string; contextWindow: number }[]>([]);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const { activeMilestone, checkStats, dismissMilestone } = useMilestones();
 
   // Session recording refs
@@ -49,10 +51,17 @@ export default function App() {
     });
   }, []);
 
-  const handlePermissionRespond = useCallback((approved: boolean) => {
-    window.copilotAPI?.respondPermission(approved);
+  const handlePermissionRespond = useCallback((decision: PermissionDecision) => {
+    if (decision === 'always' && permissionRequest) {
+      // Persist an "always allow" rule for this kind under the CWD
+      const pathPrefix = permissionRequest.cwd || cwd;
+      if (pathPrefix) {
+        window.copilotAPI?.addPermissionRule(permissionRequest.kind, pathPrefix);
+      }
+    }
+    window.copilotAPI?.respondPermission(decision);
     setPermissionRequest(null);
-  }, []);
+  }, [permissionRequest, cwd]);
 
   // Load CWD + git info + model on mount
   useEffect(() => {
@@ -68,6 +77,7 @@ export default function App() {
     }
     if (window.modelAPI) {
       window.modelAPI.get().then(setCurrentModel);
+      window.modelAPI.list().then(setAvailableModels).catch(() => {});
     }
   }, []);
 
@@ -78,6 +88,12 @@ export default function App() {
         setGitBranch(info.isRepo ? (info.branch ?? null) : null);
       });
     }
+  }, []);
+
+  const handleModelSwitch = useCallback((modelId: string) => {
+    setCurrentModel(modelId);
+    setModelDropdownOpen(false);
+    window.modelAPI?.set(modelId);
   }, []);
 
   const handleBrowseCwd = useCallback(async () => {
@@ -207,9 +223,41 @@ export default function App() {
             </>
           )}
           <span className="text-[var(--border-color)]">|</span>
-          <span className="text-[var(--accent-purple)] flex items-center gap-1">
-            🧠 {currentModel}
-          </span>
+          <div className="relative">
+            <button
+              onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+              className="text-[var(--accent-purple)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer flex items-center gap-1"
+            >
+              🧠 {availableModels.find(m => m.id === currentModel)?.name || currentModel}
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
+            </button>
+            {modelDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setModelDropdownOpen(false)} />
+                <div className="absolute top-full left-0 mt-1 z-50 w-72 max-h-80 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
+                  {availableModels.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => handleModelSwitch(m.id)}
+                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                        m.id === currentModel
+                          ? 'bg-[var(--accent-purple)]/15 text-[var(--accent-purple)]'
+                          : 'text-[var(--text-primary)] hover:bg-[var(--bg-primary)]'
+                      }`}
+                    >
+                      <span className="truncate">{m.name}</span>
+                      <span className="text-[var(--text-secondary)] shrink-0">
+                        {m.contextWindow ? `${Math.round(m.contextWindow / 1000)}K` : ''}
+                      </span>
+                    </button>
+                  ))}
+                  {availableModels.length === 0 && (
+                    <div className="px-3 py-2 text-xs text-[var(--text-secondary)]">Loading…</div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <div className="ml-auto flex items-center gap-1">
             {cwd && (
               <>

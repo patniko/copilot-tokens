@@ -4,12 +4,15 @@ import { useCallback } from 'react';
 export interface PermissionRequestData {
   kind: 'shell' | 'write' | 'mcp' | 'read' | 'url';
   toolCallId?: string;
+  cwd?: string;
   [key: string]: unknown;
 }
 
+export type PermissionDecision = 'allow' | 'deny' | 'always';
+
 interface PermissionDialogProps {
   request: PermissionRequestData | null;
-  onRespond: (approved: boolean) => void;
+  onRespond: (decision: PermissionDecision) => void;
 }
 
 const kindMeta: Record<string, { icon: string; label: string; color: string }> = {
@@ -21,7 +24,6 @@ const kindMeta: Record<string, { icon: string; label: string; color: string }> =
 };
 
 function getDetail(request: PermissionRequestData): string {
-  // Extract the most relevant detail based on kind
   if (request.kind === 'shell') {
     return String(request.command ?? request.cmd ?? request.script ?? '');
   }
@@ -34,26 +36,31 @@ function getDetail(request: PermissionRequestData): string {
   if (request.kind === 'mcp') {
     return String(request.serverName ?? request.tool ?? request.method ?? '');
   }
-  // Fallback: show all extra keys
   const extra = Object.entries(request)
-    .filter(([k]) => k !== 'kind' && k !== 'toolCallId')
+    .filter(([k]) => !['kind', 'toolCallId', 'cwd'].includes(k))
     .map(([k, v]) => `${k}: ${String(v)}`)
     .join(', ');
   return extra || '(no details)';
 }
 
+function truncatePath(p: string, max = 50): string {
+  if (p.length <= max) return p;
+  return '…' + p.slice(-max + 1);
+}
+
 export default function PermissionDialog({ request, onRespond }: PermissionDialogProps) {
-  const handleApprove = useCallback(() => onRespond(true), [onRespond]);
-  const handleDeny = useCallback(() => onRespond(false), [onRespond]);
+  const handleAllow = useCallback(() => onRespond('allow'), [onRespond]);
+  const handleAlways = useCallback(() => onRespond('always'), [onRespond]);
+  const handleDeny = useCallback(() => onRespond('deny'), [onRespond]);
 
   const meta = request ? (kindMeta[request.kind] ?? { icon: '❓', label: request.kind, color: 'var(--text-secondary)' }) : null;
   const detail = request ? getDetail(request) : '';
+  const cwdLabel = request?.cwd ? truncatePath(request.cwd) : 'project';
 
   return (
     <AnimatePresence>
       {request && meta && (
         <>
-          {/* Backdrop */}
           <motion.div
             className="fixed inset-0 z-[100] bg-black/60"
             initial={{ opacity: 0 }}
@@ -61,7 +68,6 @@ export default function PermissionDialog({ request, onRespond }: PermissionDialo
             exit={{ opacity: 0 }}
           />
 
-          {/* Dialog */}
           <motion.div
             className="fixed inset-0 z-[101] flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
@@ -101,20 +107,29 @@ export default function PermissionDialog({ request, onRespond }: PermissionDialo
               </div>
 
               {/* Actions */}
-              <div className="px-5 py-3 flex items-center justify-end gap-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-                <button
-                  onClick={handleDeny}
-                  className="px-4 py-2 text-sm font-semibold rounded-lg border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent-red)] hover:border-[var(--accent-red)] transition-colors cursor-pointer"
-                >
-                  ✕ Deny
-                </button>
-                <button
-                  onClick={handleApprove}
-                  className="px-4 py-2 text-sm font-bold rounded-lg text-black cursor-pointer"
-                  style={{ background: meta.color }}
-                >
-                  ✓ Allow
-                </button>
+              <div className="px-5 py-3 flex flex-col gap-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={handleDeny}
+                    className="px-4 py-2 text-sm font-semibold rounded-lg border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent-red)] hover:border-[var(--accent-red)] transition-colors cursor-pointer"
+                  >
+                    Deny
+                  </button>
+                  <button
+                    onClick={handleAllow}
+                    className="px-4 py-2 text-sm font-semibold rounded-lg border border-[var(--border-color)] text-[var(--text-primary)] hover:border-[var(--accent-green)] hover:text-[var(--accent-green)] transition-colors cursor-pointer"
+                  >
+                    Allow Once
+                  </button>
+                  <button
+                    onClick={handleAlways}
+                    className="px-4 py-2 text-sm font-bold rounded-lg text-black cursor-pointer"
+                    style={{ background: meta.color }}
+                    title={`Always allow ${request.kind} in ${cwdLabel}`}
+                  >
+                    Always Allow in Project
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

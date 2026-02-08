@@ -5,7 +5,11 @@ interface CopilotAPI {
   abort(): void;
   onEvent(callback: (event: unknown) => void): () => void;
   onPermissionRequest(callback: (request: unknown) => void): () => void;
-  respondPermission(approved: boolean): void;
+  respondPermission(decision: string, rulePathPrefix?: string): void;
+  addPermissionRule(kind: string, pathPrefix: string): Promise<void>;
+  getPermissionRules(): Promise<{ kind: string; pathPrefix: string }[]>;
+  removePermissionRule(index: number): Promise<void>;
+  clearPermissionRules(): Promise<void>;
 }
 
 interface StatsAPI {
@@ -38,7 +42,7 @@ interface UtilAPI {
 interface ModelAPI {
   get(): Promise<string>;
   set(model: string): Promise<void>;
-  list(): Promise<{ id: string; name: string }[]>;
+  list(): Promise<{ id: string; name: string; contextWindow: number }[]>;
 }
 
 declare global {

@@ -21,10 +21,11 @@ export default function Settings({ isOpen, onClose, onCwdChange, onModelChange }
   const { theme, setTheme, themes } = useTheme();
   const { play, enabled, setEnabled, volume, setVolume } = useSound();
   const [model, setModel] = useState('claude-sonnet-4');
-  const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([]);
+  const [availableModels, setAvailableModels] = useState<{ id: string; name: string; contextWindow: number }[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [cwd, setCwd] = useState('');
   const [recentCwds, setRecentCwds] = useState<string[]>([]);
+  const [permRules, setPermRules] = useState<{ kind: string; pathPrefix: string }[]>([]);
 
   useEffect(() => {
     if (isOpen && window.cwdAPI) {
@@ -40,6 +41,9 @@ export default function Settings({ isOpen, onClose, onCwdChange, onModelChange }
           setModelsLoading(false);
         }).catch(() => setModelsLoading(false));
       }
+    }
+    if (isOpen && window.copilotAPI?.getPermissionRules) {
+      window.copilotAPI.getPermissionRules().then(setPermRules);
     }
   }, [isOpen]);
 
@@ -214,7 +218,9 @@ export default function Settings({ isOpen, onClose, onCwdChange, onModelChange }
                     className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm cursor-pointer"
                   >
                     {availableModels.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
+                      <option key={m.id} value={m.id}>
+                        {m.name}{m.contextWindow ? ` (${Math.round(m.contextWindow / 1000)}K)` : ''}
+                      </option>
                     ))}
                     {availableModels.length === 0 && (
                       <option value={model}>{model}</option>
@@ -264,9 +270,55 @@ export default function Settings({ isOpen, onClose, onCwdChange, onModelChange }
                   </div>
                 )}
               </section>
-            </div>
 
-            {/* About */}
+              {/* Permission Rules */}
+              <section>
+                <label className="block text-sm uppercase tracking-wider text-[var(--text-secondary)] mb-3">
+                  Permission Rules
+                </label>
+                {permRules.length === 0 ? (
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    No saved rules. Click &quot;Always Allow in Project&quot; on a permission prompt to add one.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {permRules.map((rule, i) => (
+                      <div key={`${rule.kind}-${rule.pathPrefix}`} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)]">
+                        <span className="text-xs font-bold uppercase w-12" style={{
+                          color: rule.kind === 'shell' ? 'var(--accent-red)' :
+                                 rule.kind === 'write' ? 'var(--accent-gold)' :
+                                 'var(--accent-blue)'
+                        }}>
+                          {rule.kind}
+                        </span>
+                        <span className="flex-1 text-xs font-mono truncate text-[var(--text-secondary)]" title={rule.pathPrefix}>
+                          {rule.pathPrefix}
+                        </span>
+                        <button
+                          onClick={async () => {
+                            await window.copilotAPI?.removePermissionRule(i);
+                            setPermRules(prev => prev.filter((_, idx) => idx !== i));
+                          }}
+                          className="text-xs text-[var(--text-secondary)] hover:text-[var(--accent-red)] transition-colors cursor-pointer"
+                          title="Remove rule"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={async () => {
+                        await window.copilotAPI?.clearPermissionRules();
+                        setPermRules([]);
+                      }}
+                      className="self-start mt-1 px-3 py-1.5 text-xs font-medium rounded border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--accent-red)] hover:text-[var(--accent-red)] transition-colors cursor-pointer"
+                    >
+                      Clear All Rules
+                    </button>
+                  </div>
+                )}
+              </section>
+            </div>
             <div className="p-5 border-t border-[var(--border-color)] text-center text-xs text-[var(--text-secondary)]">
               <p>Copilot Slots v1.0.0</p>
               <p className="mt-1">Built with ❤️ and electron</p>

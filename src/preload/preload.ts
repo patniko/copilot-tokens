@@ -25,8 +25,20 @@ contextBridge.exposeInMainWorld('copilotAPI', {
       ipcRenderer.removeListener('copilot:permissionRequest', listener);
     };
   },
-  respondPermission(approved: boolean): void {
-    ipcRenderer.invoke('copilot:permissionResponse', approved);
+  respondPermission(decision: string, rulePathPrefix?: string): void {
+    ipcRenderer.invoke('copilot:permissionResponse', decision, rulePathPrefix);
+  },
+  addPermissionRule(kind: string, pathPrefix: string): Promise<void> {
+    return ipcRenderer.invoke('copilot:addPermissionRule', kind, pathPrefix);
+  },
+  getPermissionRules(): Promise<{ kind: string; pathPrefix: string }[]> {
+    return ipcRenderer.invoke('copilot:getPermissionRules');
+  },
+  removePermissionRule(index: number): Promise<void> {
+    return ipcRenderer.invoke('copilot:removePermissionRule', index);
+  },
+  clearPermissionRules(): Promise<void> {
+    return ipcRenderer.invoke('copilot:clearPermissionRules');
   },
 });
 
@@ -73,7 +85,7 @@ contextBridge.exposeInMainWorld('modelAPI', {
   set(model: string): Promise<void> {
     return ipcRenderer.invoke('model:set', model);
   },
-  list(): Promise<{ id: string; name: string }[]> {
+  list(): Promise<{ id: string; name: string; contextWindow: number }[]> {
     return ipcRenderer.invoke('model:list');
   },
 });

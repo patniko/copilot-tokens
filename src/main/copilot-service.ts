@@ -34,7 +34,8 @@ export class CopilotService {
   private model: string = 'claude-sonnet-4';
 
   // Permission handler set by the IPC layer
-  private permissionCallback: ((request: Record<string, unknown>) => Promise<boolean>) | null = null;
+  // Returns 'allow' (one-time), 'deny', or 'always' (persist rule)
+  private permissionCallback: ((request: Record<string, unknown>) => Promise<'allow' | 'deny' | 'always'>) | null = null;
 
   private constructor() {}
 
@@ -69,14 +70,18 @@ export class CopilotService {
     return this.model;
   }
 
-  setPermissionHandler(handler: (request: Record<string, unknown>) => Promise<boolean>): void {
+  setPermissionHandler(handler: (request: Record<string, unknown>) => Promise<'allow' | 'deny' | 'always'>): void {
     this.permissionCallback = handler;
   }
 
-  async listModels(): Promise<{ id: string; name: string }[]> {
+  async listModels(): Promise<{ id: string; name: string; contextWindow: number }[]> {
     await this.ensureStarted();
     const models = await this.client!.listModels();
-    return models.map(m => ({ id: m.id, name: m.name }));
+    return models.map(m => ({
+      id: m.id,
+      name: m.name,
+      contextWindow: m.capabilities?.limits?.max_context_window_tokens ?? 0,
+    }));
   }
 
   async ensureStarted(): Promise<void> {
@@ -101,9 +106,9 @@ export class CopilotService {
       if (this.permissionCallback) {
         const cb = this.permissionCallback;
         opts.onPermissionRequest = async (request: Record<string, unknown>) => {
-          const approved = await cb(request);
+          const decision = await cb(request);
           return {
-            kind: approved ? 'approved' : 'denied-interactively-by-user',
+            kind: decision === 'deny' ? 'denied-interactively-by-user' : 'approved',
           };
         };
       }
