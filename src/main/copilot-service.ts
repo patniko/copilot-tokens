@@ -68,7 +68,7 @@ export function loadMCPServers(): Record<string, MCPServerConfig> {
 export class CopilotService {
   private static instance: CopilotService;
   private client: CopilotClientType | null = null;
-  private session: CopilotSessionType | null = null;
+  private sessions = new Map<string, CopilotSessionType>();
   private started = false;
 
   private workingDirectory: string | undefined;
@@ -90,9 +90,10 @@ export class CopilotService {
   setWorkingDirectory(dir: string): void {
     if (dir && dir !== this.workingDirectory) {
       this.workingDirectory = dir;
-      if (this.session) {
-        this.session.destroy().catch(() => {});
-        this.session = null;
+      // Destroy all sessions so they pick up the new CWD
+      for (const [id, session] of this.sessions) {
+        session.destroy().catch(() => {});
+        this.sessions.delete(id);
       }
     }
   }
@@ -100,9 +101,9 @@ export class CopilotService {
   setModel(model: string): void {
     if (model && model !== this.model) {
       this.model = model;
-      if (this.session) {
-        this.session.destroy().catch(() => {});
-        this.session = null;
+      for (const [id, session] of this.sessions) {
+        session.destroy().catch(() => {});
+        this.sessions.delete(id);
       }
     }
   }
@@ -141,9 +142,10 @@ export class CopilotService {
     }
   }
 
-  async ensureSession(): Promise<CopilotSessionType> {
+  async ensureSession(panelId = 'main'): Promise<CopilotSessionType> {
     await this.ensureStarted();
-    if (!this.session) {
+    let session = this.sessions.get(panelId);
+    if (!session) {
       const opts: Record<string, unknown> = {
         model: this.model,
         streaming: true,
@@ -162,18 +164,28 @@ export class CopilotService {
           };
         };
       }
-      this.session = await this.client!.createSession(opts as Parameters<CopilotClientType['createSession']>[0]);
+      session = await this.client!.createSession(opts as Parameters<CopilotClientType['createSession']>[0]);
+      this.sessions.set(panelId, session);
     }
-    return this.session;
+    return session;
   }
 
-  private abortResolve: (() => void) | null = null;
+  /** Destroy and remove a specific panel session */
+  async destroySession(panelId: string): Promise<void> {
+    const session = this.sessions.get(panelId);
+    if (session) {
+      await session.destroy().catch(() => {});
+      this.sessions.delete(panelId);
+    }
+  }
 
-  async sendMessage(prompt: string, onEvent: EventCallback, attachments?: { path: string }[]): Promise<void> {
-    const session = await this.ensureSession();
+  private abortResolves = new Map<string, () => void>();
+
+  async sendMessage(prompt: string, onEvent: EventCallback, attachments?: { path: string }[], panelId = 'main'): Promise<void> {
+    const session = await this.ensureSession(panelId);
 
     const done = new Promise<void>((resolve) => {
-      this.abortResolve = resolve;
+      this.abortResolves.set(panelId, resolve);
       const unsub = session.on((event) => {
         switch (event.type) {
           case 'assistant.message_delta':
@@ -281,7 +293,7 @@ export class CopilotService {
           case 'session.idle':
             onEvent({ type: 'session.idle' });
             unsub();
-            this.abortResolve = null;
+            this.abortResolves.delete(panelId);
             resolve();
             break;
         }
@@ -296,21 +308,22 @@ export class CopilotService {
     await done;
   }
 
-  async abort(): Promise<void> {
-    if (this.session) {
-      await this.session.abort();
+  async abort(panelId = 'main'): Promise<void> {
+    const session = this.sessions.get(panelId);
+    if (session) {
+      await session.abort();
     }
-    // Resolve any pending sendMessage promise
-    if (this.abortResolve) {
-      this.abortResolve();
-      this.abortResolve = null;
+    const resolve = this.abortResolves.get(panelId);
+    if (resolve) {
+      resolve();
+      this.abortResolves.delete(panelId);
     }
   }
 
   async stop(): Promise<void> {
-    if (this.session) {
-      await this.session.destroy();
-      this.session = null;
+    for (const [id, session] of this.sessions) {
+      await session.destroy().catch(() => {});
+      this.sessions.delete(id);
     }
     if (this.started && this.client) {
       await this.client.stop();

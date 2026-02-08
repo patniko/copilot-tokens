@@ -254,8 +254,8 @@ export default function App() {
     <ThemeProvider>
       <div className={`flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono${superMode ? ' super-border' : ''}`}>
         {/* Title Bar */}
-        <header className="flex items-center justify-center py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative">
-          <div className="absolute left-4 flex items-center">
+        <header className="flex items-center justify-center py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+          <div className="absolute left-20 flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <LevelBadge compact />
           </div>
           <div className="flex items-center gap-2">
@@ -269,7 +269,7 @@ export default function App() {
               TOKENS
             </h1>
           </div>
-          <div className="absolute right-4 flex items-center gap-2">
+          <div className="absolute right-4 flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} />
             <div className="relative flex items-center">
               <button

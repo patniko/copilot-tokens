@@ -1,19 +1,23 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('copilotAPI', {
-  sendMessage(prompt: string, attachments?: { path: string }[]): void {
-    ipcRenderer.invoke('copilot:sendMessage', prompt, attachments);
+  sendMessage(prompt: string, attachments?: { path: string }[], panelId?: string): void {
+    ipcRenderer.invoke('copilot:sendMessage', prompt, attachments, panelId);
   },
-  abort(): void {
-    ipcRenderer.invoke('copilot:abort');
+  abort(panelId?: string): void {
+    ipcRenderer.invoke('copilot:abort', panelId);
   },
-  onEvent(callback: (event: unknown) => void): () => void {
+  destroySession(panelId: string): void {
+    ipcRenderer.invoke('copilot:destroySession', panelId);
+  },
+  onEvent(callback: (event: unknown) => void, panelId?: string): () => void {
+    const channel = `copilot:event:${panelId || 'main'}`;
     const listener = (_ipcEvent: Electron.IpcRendererEvent, event: unknown) => {
       callback(event);
     };
-    ipcRenderer.on('copilot:event', listener);
+    ipcRenderer.on(channel, listener);
     return () => {
-      ipcRenderer.removeListener('copilot:event', listener);
+      ipcRenderer.removeListener(channel, listener);
     };
   },
   onPermissionRequest(callback: (request: unknown) => void): () => void {

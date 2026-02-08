@@ -88,20 +88,26 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return permissions.yoloMode;
   });
 
-  ipcMain.handle('copilot:sendMessage', async (_event, prompt: string, attachments?: { path: string }[]) => {
+  ipcMain.handle('copilot:sendMessage', async (_event, prompt: string, attachments?: { path: string }[], panelId?: string) => {
+    const pid = panelId || 'main';
     try {
       await copilot.sendMessage(prompt, (event) => {
-        mainWindow.webContents.send('copilot:event', event);
-      }, attachments);
+        mainWindow.webContents.send(`copilot:event:${pid}`, event);
+      }, attachments, pid);
     } catch (err) {
       console.error('[IPC] copilot:sendMessage error:', err);
-      mainWindow.webContents.send('copilot:event', { type: 'session.idle' });
+      mainWindow.webContents.send(`copilot:event:${pid}`, { type: 'session.idle' });
     }
   });
 
-  ipcMain.handle('copilot:abort', async () => {
-    await copilot.abort();
-    mainWindow.webContents.send('copilot:event', { type: 'session.idle' });
+  ipcMain.handle('copilot:abort', async (_event, panelId?: string) => {
+    const pid = panelId || 'main';
+    await copilot.abort(pid);
+    mainWindow.webContents.send(`copilot:event:${pid}`, { type: 'session.idle' });
+  });
+
+  ipcMain.handle('copilot:destroySession', async (_event, panelId: string) => {
+    await copilot.destroySession(panelId);
   });
 
   ipcMain.handle('stats:getTopSessions', (_event, limit: number) => {
