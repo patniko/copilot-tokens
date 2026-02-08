@@ -61,7 +61,7 @@ export default function PromptBar({ onSend, onGeneratingChange }: PromptBarProps
   }, [setGenerating]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }

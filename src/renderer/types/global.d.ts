@@ -18,11 +18,19 @@ interface GitAPI {
   commit(message: string, files: string[]): Promise<{ success: boolean; hash?: string }>;
 }
 
+interface CwdAPI {
+  get(): Promise<string>;
+  set(dir: string): Promise<void>;
+  getRecent(): Promise<string[]>;
+  browse(): Promise<string | null>;
+}
+
 declare global {
   interface Window {
     copilotAPI: CopilotAPI;
     statsAPI: StatsAPI;
     gitAPI: GitAPI;
+    cwdAPI: CwdAPI;
   }
 }
 

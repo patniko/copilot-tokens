@@ -41,3 +41,18 @@ contextBridge.exposeInMainWorld('gitAPI', {
     return ipcRenderer.invoke('git:commit', message, files);
   },
 });
+
+contextBridge.exposeInMainWorld('cwdAPI', {
+  get(): Promise<string> {
+    return ipcRenderer.invoke('cwd:get');
+  },
+  set(dir: string): Promise<void> {
+    return ipcRenderer.invoke('cwd:set', dir);
+  },
+  getRecent(): Promise<string[]> {
+    return ipcRenderer.invoke('cwd:getRecent');
+  },
+  browse(): Promise<string | null> {
+    return ipcRenderer.invoke('cwd:browse');
+  },
+});

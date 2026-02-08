@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTheme } from '../hooks/useTheme';
 import { useSound } from '../hooks/useSound';
@@ -19,6 +19,31 @@ export default function Settings({ isOpen, onClose }: SettingsProps) {
   const { theme, setTheme, themes } = useTheme();
   const { play, enabled, setEnabled, volume, setVolume } = useSound();
   const [model, setModel] = useState('gpt-4o');
+  const [cwd, setCwd] = useState('');
+  const [recentCwds, setRecentCwds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isOpen && window.cwdAPI) {
+      window.cwdAPI.get().then(setCwd);
+      window.cwdAPI.getRecent().then(setRecentCwds);
+    }
+  }, [isOpen]);
+
+  const handleBrowse = async () => {
+    if (!window.cwdAPI) return;
+    const dir = await window.cwdAPI.browse();
+    if (dir) {
+      setCwd(dir);
+      setRecentCwds(prev => [dir, ...prev.filter(d => d !== dir)].slice(0, 10));
+    }
+  };
+
+  const handleSelectRecent = async (dir: string) => {
+    if (!window.cwdAPI) return;
+    await window.cwdAPI.set(dir);
+    setCwd(dir);
+    setRecentCwds(prev => [dir, ...prev.filter(d => d !== dir)].slice(0, 10));
+  };
 
   return (
     <AnimatePresence>
@@ -172,23 +197,43 @@ export default function Settings({ isOpen, onClose }: SettingsProps) {
                 </select>
               </section>
 
-              {/* Working Directory (stub) */}
+              {/* Working Directory */}
               <section>
                 <label className="block text-sm uppercase tracking-wider text-[var(--text-secondary)] mb-3">
-                  Working Directory{' '}
-                  <span className="normal-case text-xs opacity-60">(Coming soon)</span>
+                  Working Directory
                 </label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-sm text-[var(--text-secondary)] truncate">
-                    ~/projects/my-app
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)] truncate font-mono">
+                    {cwd || '(not set)'}
                   </div>
                   <button
-                    disabled
-                    className="px-3 py-2 text-xs font-medium rounded border border-[var(--border-color)] text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
+                    onClick={handleBrowse}
+                    className="px-3 py-2 text-xs font-medium rounded border border-[var(--border-color)] text-[var(--text-primary)] hover:border-[var(--accent-gold)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer"
                   >
-                    Change
+                    Browse
                   </button>
                 </div>
+                {recentCwds.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">
+                      Recent
+                    </span>
+                    {recentCwds.map((dir) => (
+                      <button
+                        key={dir}
+                        onClick={() => handleSelectRecent(dir)}
+                        className={`text-left px-2 py-1.5 rounded text-xs font-mono truncate transition-colors cursor-pointer ${
+                          dir === cwd
+                            ? 'bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] border border-[var(--accent-gold)]/30'
+                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)]'
+                        }`}
+                        title={dir}
+                      >
+                        {dir}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </section>
             </div>
 

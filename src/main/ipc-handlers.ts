@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, dialog } from 'electron';
 import { CopilotService } from './copilot-service';
 import { StatsService, SessionStats } from './stats-service';
 
@@ -45,5 +45,30 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     // TODO: Implement git commit via child_process
     console.log(`[IPC] git:commit: ${message}`);
     return { success: false, hash: undefined };
+  });
+
+  ipcMain.handle('cwd:get', () => {
+    return stats.getCwd();
+  });
+
+  ipcMain.handle('cwd:set', (_event, dir: string) => {
+    stats.setCwd(dir);
+  });
+
+  ipcMain.handle('cwd:getRecent', () => {
+    return stats.getRecentCwds();
+  });
+
+  ipcMain.handle('cwd:browse', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+      title: 'Select Working Directory',
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+      const dir = result.filePaths[0];
+      stats.setCwd(dir);
+      return dir;
+    }
+    return null;
   });
 }

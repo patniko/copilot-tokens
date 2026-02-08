@@ -35,6 +35,8 @@ interface StoreSchema {
   currentStreak: number;
   lastSessionDate: string;
   fastestResponse: number;
+  recentCwds: string[];
+  currentCwd: string;
 }
 
 const store = new Store<StoreSchema>({
@@ -46,6 +48,8 @@ const store = new Store<StoreSchema>({
     currentStreak: 0,
     lastSessionDate: '',
     fastestResponse: Infinity,
+    recentCwds: [],
+    currentCwd: '',
   },
 });
 
@@ -120,5 +124,22 @@ export class StatsService {
     const sessions = store.get('sessions');
     const rank = sessions.filter(s => (s.inputTokens + s.outputTokens) > totalTokens).length + 1;
     return rank;
+  }
+
+  // CWD management
+
+  getCwd(): string {
+    return store.get('currentCwd') || '';
+  }
+
+  setCwd(dir: string): void {
+    store.set('currentCwd', dir);
+    const recent = store.get('recentCwds').filter(d => d !== dir);
+    recent.unshift(dir);
+    store.set('recentCwds', recent.slice(0, 10));
+  }
+
+  getRecentCwds(): string[] {
+    return store.get('recentCwds');
   }
 }
