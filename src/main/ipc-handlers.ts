@@ -6,11 +6,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   const copilot = CopilotService.getInstance();
   const stats = new StatsService();
 
-  ipcMain.handle('copilot:sendMessage', async (_event, prompt: string) => {
+  ipcMain.handle('copilot:sendMessage', async (_event, prompt: string, attachments?: { path: string }[]) => {
     try {
       await copilot.sendMessage(prompt, (event) => {
         mainWindow.webContents.send('copilot:event', event);
-      });
+      }, attachments);
     } catch (err) {
       console.error('[IPC] copilot:sendMessage error:', err);
       mainWindow.webContents.send('copilot:event', { type: 'session.idle' });

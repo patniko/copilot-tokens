@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('copilotAPI', {
-  sendMessage(prompt: string): void {
-    ipcRenderer.invoke('copilot:sendMessage', prompt);
+  sendMessage(prompt: string, attachments?: { path: string }[]): void {
+    ipcRenderer.invoke('copilot:sendMessage', prompt, attachments);
   },
   abort(): void {
     ipcRenderer.invoke('copilot:abort');

@@ -52,7 +52,7 @@ export class CopilotService {
     return this.session;
   }
 
-  async sendMessage(prompt: string, onEvent: EventCallback): Promise<void> {
+  async sendMessage(prompt: string, onEvent: EventCallback, attachments?: { path: string }[]): Promise<void> {
     const session = await this.ensureSession();
 
     const done = new Promise<void>((resolve) => {
@@ -94,7 +94,11 @@ export class CopilotService {
       });
     });
 
-    await session.send({ prompt });
+    const sendOpts: { prompt: string; attachments?: { type: 'file'; path: string }[] } = { prompt };
+    if (attachments?.length) {
+      sendOpts.attachments = attachments.map(a => ({ type: 'file' as const, path: a.path }));
+    }
+    await session.send(sendOpts);
     await done;
   }
 

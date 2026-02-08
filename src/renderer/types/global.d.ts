@@ -1,7 +1,7 @@
 import type { SessionStats, LifetimeStats } from '../../main/stats-service';
 
 interface CopilotAPI {
-  sendMessage(prompt: string): void;
+  sendMessage(prompt: string, attachments?: { path: string }[]): void;
   abort(): void;
   onEvent(callback: (event: unknown) => void): () => void;
 }
