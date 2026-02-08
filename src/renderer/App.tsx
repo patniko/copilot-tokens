@@ -16,6 +16,7 @@ import SessionBrowser from './components/SessionBrowser';
 import LevelBadge from './components/LevelBadge';
 import LevelUpOverlay from './components/LevelUpOverlay';
 import { useSessionRecorder } from './hooks/useSessionRecorder';
+import { useBadges } from './hooks/useBadges';
 import { addSessionToProgress, type LevelProgress } from './lib/level-system';
 import { partyBus, PartyEvents } from './lib/party-bus';
 import SoundManager from './lib/sound-manager';
@@ -41,6 +42,7 @@ export default function App() {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const { activeMilestone, checkStats, dismissMilestone } = useMilestones();
   const sessionRecorder = useSessionRecorder();
+  const { trigger: triggerBadge } = useBadges();
 
   // YOLO mode state
   const [yoloMode, setYoloMode] = useState(false);
@@ -53,12 +55,13 @@ export default function App() {
   // Session recording refs
   const latestStatsRef = useRef<DashboardStats | null>(null);
   const sessionStartRef = useRef<number | null>(null);
+  const conversationEventsRef = useRef<Record<string, unknown>[]>([]);
 
   // Reset key — incrementing remounts ReelArea + TokenDashboard
   const [resetKey, setResetKey] = useState(0);
 
   // Dynamic panels state: each panel has its own id, prompt, and resetKey
-  const [panels, setPanels] = useState<{ id: string; userPrompt: string | null; resetKey: number }[]>([
+  const [panels, setPanels] = useState<{ id: string; userPrompt: string | null; resetKey: number; initialEvents?: Record<string, unknown>[] }[]>([
     { id: 'main', userPrompt: null, resetKey: 0 },
   ]);
   const panelCounter = useRef(0);
@@ -68,6 +71,7 @@ export default function App() {
     setChangedFiles([]);
     latestStatsRef.current = null;
     sessionStartRef.current = null;
+    conversationEventsRef.current = [];
     sessionRecorder.reset();
     setResetKey((k) => k + 1);
     // Reset all panels to just the main one
@@ -235,12 +239,33 @@ export default function App() {
     return () => unsubs.forEach(u => u());
   }, [panels.map(p => p.id).join(',')]);
 
+  // Capture raw copilot events for conversation persistence
+  useEffect(() => {
+    if (!window.copilotAPI?.onEvent) return;
+    const handler = (event: unknown) => {
+      const ev = event as Record<string, unknown> | null;
+      if (ev && typeof ev === 'object') {
+        conversationEventsRef.current.push(ev);
+      }
+    };
+    const unsubs = panels.map(p => window.copilotAPI.onEvent(handler, p.id));
+    return () => unsubs.forEach(u => u());
+  }, [panels.map(p => p.id).join(',')]);
+
   const handlePanelSend = useCallback((panelId: string, prompt: string) => {
     if (!currentModel) {
       setModelsError(modelsLoading ? 'Models are still loading, please wait…' : 'No model selected. Please select a model first.');
       return;
     }
     if (!sessionStartRef.current) sessionStartRef.current = Date.now();
+    // Time-of-day badges
+    const hour = new Date().getHours();
+    if (hour >= 0 && hour < 6) triggerBadge('badge-night-owl');
+    if (hour >= 4 && hour < 6) triggerBadge('badge-early-bird');
+    // Record user message for conversation persistence
+    conversationEventsRef.current.push({ type: 'user.message', content: prompt });
+    // Dual agents badge: if already generating from another panel, two are running
+    if (agentActive && panels.length > 1) triggerBadge('badge-dual-agents');
     setAgentActive(true);
     setPanels(prev => prev.map(p =>
       p.id === panelId ? { ...p, userPrompt: prompt } : p,
@@ -250,7 +275,7 @@ export default function App() {
         p.id === panelId ? { ...p, userPrompt: null } : p,
       ));
     });
-  }, [currentModel, modelsLoading]);
+  }, [currentModel, modelsLoading, triggerBadge, agentActive, panels.length]);
 
   const handleSend = useCallback((prompt: string) => {
     handlePanelSend('main', prompt);
@@ -259,8 +284,13 @@ export default function App() {
   const handleAddPanel = useCallback(() => {
     panelCounter.current += 1;
     const newId = `split-${panelCounter.current}`;
-    setPanels(prev => [...prev, { id: newId, userPrompt: null, resetKey: 0 }]);
-  }, []);
+    setPanels(prev => {
+      const next = [...prev, { id: newId, userPrompt: null, resetKey: 0 }];
+      if (next.length === 2) triggerBadge('badge-first-split');
+      if (next.length >= 3) triggerBadge('badge-3-panels');
+      return next;
+    });
+  }, [triggerBadge]);
 
   const handleClosePanel = useCallback((panelId: string) => {
     setPanels(prev => {
@@ -293,6 +323,20 @@ export default function App() {
       });
       // Save session replay events
       sessionRecorder.save();
+
+      // Save conversation log for session restore
+      if (conversationEventsRef.current.length > 0) {
+        window.statsAPI?.saveConversationLog(start, conversationEventsRef.current);
+        conversationEventsRef.current = [];
+      }
+
+      // Session-based badges
+      if (durationMs > 10 * 60 * 1000) triggerBadge('badge-marathon');
+      if (durationMs < 30 * 1000 && stats.toolCalls > 0) triggerBadge('badge-speed-demon');
+      if (stats.toolCalls >= 10) triggerBadge('badge-10-tools');
+      window.statsAPI?.getAllSessions().then((all) => {
+        if (all && all.length >= 5) triggerBadge('badge-5-sessions');
+      });
 
       // Update level progress
       window.statsAPI?.getLevelProgress().then((lp) => {
@@ -335,7 +379,11 @@ export default function App() {
         {/* Title Bar */}
         <header className="flex items-center justify-center py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
           <div className="absolute left-20 flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            <LevelBadge compact />
+            <LevelBadge
+              compact
+              onOpenLeaderboard={() => { setLeaderboardOpen(true); setSettingsOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
+              onOpenTrophyCase={() => { setTrophyCaseOpen(true); setSettingsOpen(false); setLeaderboardOpen(false); setPackStudioOpen(false); }}
+            />
           </div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-widest text-[var(--accent-gold)] neon-glow flex items-center gap-2">
@@ -349,7 +397,7 @@ export default function App() {
             </h1>
           </div>
           <div className="absolute right-4 flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} />
+            <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} onCommitSuccess={() => triggerBadge('badge-first-commit')} />
           </div>
         </header>
 
@@ -491,6 +539,7 @@ export default function App() {
                 if (next) {
                   setYoloFlash(true);
                   setTimeout(() => setYoloFlash(false), 1200);
+                  triggerBadge('badge-yolo');
                 } else {
                   setYoloCool(true);
                   setTimeout(() => setYoloCool(false), 1500);
@@ -550,14 +599,22 @@ export default function App() {
           <section className="flex-1 min-w-0 flex flex-col overflow-hidden">
             {sessionBrowserOpen ? (
               <SessionBrowser
-                onSelect={(session) => {
+                onSelect={async (session) => {
                   setSessionBrowserOpen(false);
                   if (session.cwd) {
                     setCwd(session.cwd);
                     window.cwdAPI?.set(session.cwd);
                     refreshGitInfo(session.cwd);
                   }
+                  // Load conversation history
+                  const log = await window.statsAPI?.getConversationLog(session.timestamp);
+                  const events = log?.events;
+                  triggerBadge('badge-load-session');
                   handleReset();
+                  if (events && events.length > 0) {
+                    // Set initialEvents on the main panel after reset
+                    setPanels([{ id: 'main', userPrompt: null, resetKey: Date.now(), initialEvents: events }]);
+                  }
                 }}
                 onClose={() => setSessionBrowserOpen(false)}
               />
@@ -574,6 +631,7 @@ export default function App() {
                 onLoadSession={() => setSessionBrowserOpen(true)}
                 onSplitSession={handleAddPanel}
                 onClosePanel={handleClosePanel}
+                onBadge={triggerBadge}
               />
             )}
           </section>

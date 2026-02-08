@@ -34,6 +34,7 @@ export interface Achievement {
   label: string;
   emoji: string;
   unlockedAt: number;
+  count: number;
 }
 
 export interface SessionEvent {
@@ -63,6 +64,11 @@ export interface CommitBests {
   linesRemoved: number;
 }
 
+export interface ConversationLog {
+  sessionTimestamp: number;
+  events: Record<string, unknown>[];
+}
+
 interface StoreSchema {
   sessions: StoredSession[];
   allTimeBests: Partial<Record<keyof SessionStats, number>>;
@@ -77,6 +83,7 @@ interface StoreSchema {
   currentModel: string;
   achievements: Achievement[];
   sessionEvents: SessionEventLog[];
+  conversationLogs: ConversationLog[];
   levelProgress: LevelProgressData;
 }
 
@@ -96,6 +103,7 @@ const store = new Store<StoreSchema>({
     currentModel: 'claude-sonnet-4',
     achievements: [],
     sessionEvents: [],
+    conversationLogs: [],
     levelProgress: {
       level: 1,
       categoryProgress: { tokens: 0, messages: 0, toolCalls: 0, files: 0, lines: 0 },
@@ -231,8 +239,12 @@ export class StatsService {
 
   addAchievement(achievement: Achievement): void {
     const existing = store.get('achievements');
-    if (existing.some((a) => a.milestoneId === achievement.milestoneId)) return;
-    existing.push(achievement);
+    const idx = existing.findIndex((a) => a.milestoneId === achievement.milestoneId);
+    if (idx >= 0) {
+      existing[idx].count = (existing[idx].count || 1) + 1;
+    } else {
+      existing.push({ ...achievement, count: achievement.count || 1 });
+    }
     store.set('achievements', existing);
   }
 
@@ -256,6 +268,19 @@ export class StatsService {
 
   getSessionEventLog(sessionTimestamp: number): SessionEventLog | undefined {
     return store.get('sessionEvents').find((l) => l.sessionTimestamp === sessionTimestamp);
+  }
+
+  // Conversation logs (raw copilot events for session restore)
+
+  saveConversationLog(sessionTimestamp: number, events: Record<string, unknown>[]): void {
+    const logs = store.get('conversationLogs');
+    logs.push({ sessionTimestamp, events });
+    if (logs.length > 20) logs.splice(0, logs.length - 20);
+    store.set('conversationLogs', logs);
+  }
+
+  getConversationLog(sessionTimestamp: number): ConversationLog | undefined {
+    return store.get('conversationLogs').find((l) => l.sessionTimestamp === sessionTimestamp);
   }
 
   // Level system

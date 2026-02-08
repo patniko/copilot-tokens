@@ -1,11 +1,13 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
-import type { Milestone } from '../lib/milestones';
+import type { Milestone, Badge } from '../lib/milestones';
 import { useSound } from '../hooks/useSound';
 
+type AnyMilestone = Milestone | Badge;
+
 interface MilestoneOverlayProps {
-  milestone: Milestone | null;
+  milestone: AnyMilestone | null;
   onComplete: () => void;
 }
 

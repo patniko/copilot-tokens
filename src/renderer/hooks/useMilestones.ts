@@ -1,13 +1,15 @@
-import { useState, useRef, useCallback } from 'react';
-import type { Milestone } from '../lib/milestones';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import type { Milestone, Badge } from '../lib/milestones';
 import { checkMilestones } from '../lib/milestones';
 import type { DashboardStats } from '../components/TokenDashboard';
 import { partyBus, PartyEvents } from '../lib/party-bus';
 
+type AnyMilestone = Milestone | Badge;
+
 export function useMilestones() {
-  const [activeMilestone, setActiveMilestone] = useState<Milestone | null>(null);
+  const [activeMilestone, setActiveMilestone] = useState<AnyMilestone | null>(null);
   const previousStatsRef = useRef<DashboardStats | null>(null);
-  const queueRef = useRef<Milestone[]>([]);
+  const queueRef = useRef<AnyMilestone[]>([]);
   const firedRef = useRef<Set<string>>(new Set());
 
   const showNext = useCallback(() => {
@@ -45,6 +47,7 @@ export function useMilestones() {
           label: m.label,
           emoji: m.emoji,
           unlockedAt: Date.now(),
+          count: 1,
         });
       }
 
@@ -57,6 +60,22 @@ export function useMilestones() {
     },
     [activeMilestone],
   );
+
+  // Listen for badge triggers from useBadges (via party bus)
+  useEffect(() => {
+    const handler = (data: unknown) => {
+      const badge = data as AnyMilestone;
+      if (!badge || !badge.id) return;
+      // Don't double-fire threshold milestones (those are handled by checkStats)
+      if ('threshold' in badge) return;
+      if (activeMilestone === null && queueRef.current.length === 0) {
+        setActiveMilestone(badge);
+      } else {
+        queueRef.current.push(badge);
+      }
+    };
+    return partyBus.on(PartyEvents.MILESTONE_TRIGGERED, handler);
+  }, [activeMilestone]);
 
   return { activeMilestone, checkStats, dismissMilestone };
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MILESTONES, getAllMilestones, type Milestone } from '../lib/milestones';
+import { MILESTONES, getAllMilestones, type Milestone, type Badge } from '../lib/milestones';
 import { getLevelTier, MAX_LEVEL } from '../lib/level-system';
 import type { Achievement, LevelProgressData } from '../../main/stats-service';
 
@@ -151,15 +151,22 @@ export default function TrophyCase({ isOpen, onClose }: TrophyCaseProps) {
                 {allMilestones.map((m) => {
                   const unlocked = unlockedIds.has(m.id);
                   const achievement = achievements.find((a) => a.milestoneId === m.id);
+                  const isBadge = 'description' in m;
+                  const count = achievement?.count || 0;
                   return (
                     <motion.div
                       key={m.id}
-                      className={`glass-card p-3 flex flex-col items-center gap-1.5 text-center transition-colors ${
+                      className={`glass-card p-3 flex flex-col items-center gap-1.5 text-center transition-colors relative ${
                         unlocked ? '' : 'opacity-40 grayscale'
                       }`}
                       whileHover={unlocked ? { scale: 1.05 } : {}}
-                      title={unlocked && achievement ? `Unlocked ${formatDate(achievement.unlockedAt)}` : 'Locked'}
+                      title={unlocked && achievement ? `Unlocked ${formatDate(achievement.unlockedAt)}${count > 1 ? ` · ×${count}` : ''}` : isBadge ? (m as Badge).description : 'Locked'}
                     >
+                      {unlocked && count > 1 && (
+                        <span className="absolute top-1 right-1.5 text-[9px] font-bold text-[var(--accent-gold)] tabular-nums">
+                          ×{count}
+                        </span>
+                      )}
                       <span className={`text-2xl ${unlocked ? '' : 'blur-[2px]'}`}>
                         {unlocked ? m.emoji : '🔒'}
                       </span>
@@ -173,9 +180,10 @@ export default function TrophyCase({ isOpen, onClose }: TrophyCaseProps) {
                       )}
                       {!unlocked && (
                         <span className="text-[8px] text-[var(--text-secondary)]">
-                          {m.metric === 'totalTokens' ? `${(m.threshold / 1000).toFixed(0)}K tokens` :
-                           m.metric === 'filesChanged' ? `${m.threshold} files` :
-                           `${m.threshold} lines`}
+                          {isBadge ? (m as Badge).description :
+                           'metric' in m && m.metric === 'totalTokens' ? `${((m as Milestone).threshold / 1000).toFixed(0)}K tokens` :
+                           'metric' in m && m.metric === 'filesChanged' ? `${(m as Milestone).threshold} files` :
+                           `${(m as Milestone).threshold} lines`}
                         </span>
                       )}
                     </motion.div>

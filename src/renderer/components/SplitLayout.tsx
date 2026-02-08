@@ -7,11 +7,13 @@ export interface PanelData {
   id: string;
   userPrompt: string | null;
   resetKey: number;
+  initialEvents?: Record<string, unknown>[];
 }
 
 interface ChatPanelProps {
   panelId: string;
   userPrompt: string | null;
+  initialEvents?: Record<string, unknown>[];
   onUsage?: (input: number, output: number) => void;
   onSend: (prompt: string) => void;
   cwd: string;
@@ -24,9 +26,10 @@ interface ChatPanelProps {
   onNewSession: () => void;
   onLoadSession: () => void;
   onSplitSession: () => void;
+  onBadge?: (badgeId: string) => void;
 }
 
-function ChatPanel({ panelId, userPrompt, onUsage, onSend, cwd, onBrowseCwd, permissionRequest, onPermissionRespond, resetKey, showClose, onClose, onNewSession, onLoadSession, onSplitSession }: ChatPanelProps) {
+function ChatPanel({ panelId, userPrompt, initialEvents, onUsage, onSend, cwd, onBrowseCwd, permissionRequest, onPermissionRespond, resetKey, showClose, onClose, onNewSession, onLoadSession, onSplitSession, onBadge }: ChatPanelProps) {
   return (
     <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
       {showClose && (
@@ -43,8 +46,8 @@ function ChatPanel({ panelId, userPrompt, onUsage, onSend, cwd, onBrowseCwd, per
           </button>
         </div>
       )}
-      <ReelArea key={resetKey} panelId={panelId} userPrompt={userPrompt} onUsage={onUsage} permissionRequest={permissionRequest} onPermissionRespond={onPermissionRespond} />
-      <PromptBar panelId={panelId} onSend={onSend} cwd={cwd} onBrowseCwd={onBrowseCwd} onNewSession={onNewSession} onLoadSession={onLoadSession} onSplitSession={onSplitSession} />
+      <ReelArea key={resetKey} panelId={panelId} userPrompt={userPrompt} initialEvents={initialEvents} onUsage={onUsage} permissionRequest={permissionRequest} onPermissionRespond={onPermissionRespond} />
+      <PromptBar panelId={panelId} onSend={onSend} cwd={cwd} onBrowseCwd={onBrowseCwd} onNewSession={onNewSession} onLoadSession={onLoadSession} onSplitSession={onSplitSession} onBadge={onBadge} />
     </div>
   );
 }
@@ -61,6 +64,7 @@ interface SplitLayoutProps {
   onLoadSession: () => void;
   onSplitSession: () => void;
   onClosePanel: (panelId: string) => void;
+  onBadge?: (badgeId: string) => void;
 }
 
 export default function SplitLayout({
@@ -75,6 +79,7 @@ export default function SplitLayout({
   onLoadSession,
   onSplitSession,
   onClosePanel,
+  onBadge,
 }: SplitLayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState<number[]>([]);
@@ -124,6 +129,7 @@ export default function SplitLayout({
             <ChatPanel
               panelId={panel.id}
               userPrompt={panel.userPrompt}
+              initialEvents={panel.initialEvents}
               onUsage={onUsage}
               onSend={(prompt) => onPanelSend(panel.id, prompt)}
               cwd={cwd}
@@ -136,6 +142,7 @@ export default function SplitLayout({
               onNewSession={onNewSession}
               onLoadSession={onLoadSession}
               onSplitSession={onSplitSession}
+              onBadge={onBadge}
             />
           </div>
           {i < panels.length - 1 && (

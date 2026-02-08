@@ -8,11 +8,12 @@ interface CommitButtonProps {
   changedFiles: string[];
   visible: boolean;
   onSendFeedback?: (feedback: string) => void;
+  onCommitSuccess?: () => void;
 }
 
 type ModalStep = 'reels' | 'editor' | 'diff' | 'committing' | 'success' | 'error';
 
-export default function CommitButton({ changedFiles, visible, onSendFeedback }: CommitButtonProps) {
+export default function CommitButton({ changedFiles, visible, onSendFeedback, onCommitSuccess }: CommitButtonProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const disabled = !visible;
 
@@ -46,6 +47,7 @@ export default function CommitButton({ changedFiles, visible, onSendFeedback }: 
             changedFiles={changedFiles}
             onClose={() => setModalOpen(false)}
             onSendFeedback={onSendFeedback}
+            onCommitSuccess={onCommitSuccess}
           />
         )}
       </AnimatePresence>
@@ -57,9 +59,10 @@ interface CommitModalProps {
   changedFiles: string[];
   onClose: () => void;
   onSendFeedback?: (feedback: string) => void;
+  onCommitSuccess?: () => void;
 }
 
-function CommitModal({ changedFiles, onClose, onSendFeedback }: CommitModalProps) {
+function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }: CommitModalProps) {
   const { play } = useSound();
   const [step, setStep] = useState<ModalStep>('reels');
   const [lockedCount, setLockedCount] = useState(0);
@@ -99,6 +102,7 @@ function CommitModal({ changedFiles, onClose, onSendFeedback }: CommitModalProps
         setCommitHash(result.hash ?? '');
         setStep('success');
         play('commit');
+        onCommitSuccess?.();
         confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
         // Auto-close after 2s
         setTimeout(() => {

@@ -138,8 +138,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return stats.getAchievements();
   });
 
-  ipcMain.handle('stats:addAchievement', (_event, achievement: { milestoneId: string; label: string; emoji: string; unlockedAt: number }) => {
-    stats.addAchievement(achievement);
+  ipcMain.handle('stats:addAchievement', (_event, achievement: { milestoneId: string; label: string; emoji: string; unlockedAt: number; count?: number }) => {
+    stats.addAchievement({ ...achievement, count: achievement.count || 1 });
   });
 
   ipcMain.handle('stats:clearAchievements', () => {
@@ -156,6 +156,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('stats:getSessionEventLog', (_event, sessionTimestamp: number) => {
     return stats.getSessionEventLog(sessionTimestamp);
+  });
+
+  ipcMain.handle('stats:saveConversationLog', (_event, sessionTimestamp: number, events: Record<string, unknown>[]) => {
+    stats.saveConversationLog(sessionTimestamp, events);
+  });
+
+  ipcMain.handle('stats:getConversationLog', (_event, sessionTimestamp: number) => {
+    return stats.getConversationLog(sessionTimestamp);
   });
 
   ipcMain.handle('stats:getLevelProgress', () => {

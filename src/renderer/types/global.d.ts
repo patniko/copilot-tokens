@@ -30,6 +30,8 @@ interface StatsAPI {
   saveSessionEvents(sessionTimestamp: number, events: SessionEvent[]): Promise<void>;
   getSessionEvents(): Promise<SessionEventLog[]>;
   getSessionEventLog(sessionTimestamp: number): Promise<SessionEventLog | undefined>;
+  saveConversationLog(sessionTimestamp: number, events: Record<string, unknown>[]): Promise<void>;
+  getConversationLog(sessionTimestamp: number): Promise<{ sessionTimestamp: number; events: Record<string, unknown>[] } | undefined>;
   getCommitBests(): Promise<{ linesAdded: number; linesRemoved: number }>;
   getLevelProgress(): Promise<LevelProgressData>;
   setLevelProgress(progress: LevelProgressData): Promise<void>;

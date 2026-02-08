@@ -89,6 +89,12 @@ contextBridge.exposeInMainWorld('statsAPI', {
   getSessionEventLog(sessionTimestamp: number): Promise<{ sessionTimestamp: number; events: { type: string; timestamp: number; data?: Record<string, unknown> }[] } | undefined> {
     return ipcRenderer.invoke('stats:getSessionEventLog', sessionTimestamp);
   },
+  saveConversationLog(sessionTimestamp: number, events: Record<string, unknown>[]): Promise<void> {
+    return ipcRenderer.invoke('stats:saveConversationLog', sessionTimestamp, events);
+  },
+  getConversationLog(sessionTimestamp: number): Promise<{ sessionTimestamp: number; events: Record<string, unknown>[] } | undefined> {
+    return ipcRenderer.invoke('stats:getConversationLog', sessionTimestamp);
+  },
   getCommitBests(): Promise<{ linesAdded: number; linesRemoved: number }> {
     return ipcRenderer.invoke('stats:getCommitBests');
   },

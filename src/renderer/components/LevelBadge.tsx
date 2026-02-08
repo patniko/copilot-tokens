@@ -15,6 +15,8 @@ import type { LevelProgressData } from '../../main/stats-service';
 interface LevelBadgeProps {
   /** Compact mode shows just the level number + tier emoji in the header. */
   compact?: boolean;
+  onOpenLeaderboard?: () => void;
+  onOpenTrophyCase?: () => void;
 }
 
 const formatNumber = (n: number): string => {
@@ -23,7 +25,7 @@ const formatNumber = (n: number): string => {
   return n.toLocaleString();
 };
 
-export default function LevelBadge({ compact }: LevelBadgeProps) {
+export default function LevelBadge({ compact, onOpenLeaderboard, onOpenTrophyCase }: LevelBadgeProps) {
   const [progress, setProgress] = useState<LevelProgress | null>(null);
   const [expanded, setExpanded] = useState(false);
 
@@ -82,6 +84,26 @@ export default function LevelBadge({ compact }: LevelBadgeProps) {
               onClick={(e) => e.stopPropagation()}
             >
               <LevelDetail progress={progress} tier={tier} completions={completions} thresholds={thresholds} />
+              {(onOpenLeaderboard || onOpenTrophyCase) && (
+                <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--border-color)]">
+                  {onOpenLeaderboard && (
+                    <button
+                      onClick={() => { setExpanded(false); onOpenLeaderboard(); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] bg-[var(--bg-primary)] border border-[var(--border-color)] hover:border-[var(--accent-gold)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer text-[var(--text-secondary)]"
+                    >
+                      <span>🏅</span> Leaderboard
+                    </button>
+                  )}
+                  {onOpenTrophyCase && (
+                    <button
+                      onClick={() => { setExpanded(false); onOpenTrophyCase(); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] bg-[var(--bg-primary)] border border-[var(--border-color)] hover:border-[var(--accent-gold)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer text-[var(--text-secondary)]"
+                    >
+                      <span>🏆</span> Trophies
+                    </button>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

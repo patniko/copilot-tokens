@@ -24,6 +24,7 @@ import type { PermissionRequestData, PermissionDecision } from './PermissionDial
 interface ReelAreaProps {
   panelId?: string;
   userPrompt: string | null;
+  initialEvents?: Record<string, unknown>[];
   onUserMessage?: (msg: UserMessage) => void;
   onUsage?: (input: number, output: number) => void;
   permissionRequest?: PermissionRequestData | null;
@@ -72,7 +73,7 @@ function toolTitleFromArgs(toolName: string, toolType: ToolCallMessage['toolType
 }
 
 
-export default function ReelArea({ panelId, userPrompt, onUserMessage, onUsage, permissionRequest, onPermissionRespond }: ReelAreaProps) {
+export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMessage, onUsage, permissionRequest, onPermissionRespond }: ReelAreaProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [intent, setIntent] = useState<string | null>(null);
   const [isWaiting, setIsWaiting] = useState(false);
@@ -82,6 +83,75 @@ export default function ReelArea({ panelId, userPrompt, onUserMessage, onUsage, 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastPromptRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
+
+  // Replay initial events to restore a loaded session
+  useEffect(() => {
+    if (!initialEvents || initialEvents.length === 0) return;
+    const restored: ConversationMessage[] = [];
+    let assistantId: string | null = null;
+
+    for (const ev of initialEvents) {
+      const type = ev.type as string;
+
+      if (type === 'user.message') {
+        restored.push({
+          id: generateId(),
+          type: 'user',
+          content: String(ev.content ?? ''),
+          timestamp: Date.now(),
+        });
+        assistantId = null;
+        continue;
+      }
+
+      if (type === 'assistant.message_delta') {
+        const delta = String((ev as Record<string, unknown>).delta ?? '');
+        if (assistantId) {
+          const msg = restored.find(m => m.id === assistantId);
+          if (msg && msg.type === 'assistant') {
+            msg.content += delta;
+          }
+        } else {
+          assistantId = generateId();
+          restored.push({
+            id: assistantId,
+            type: 'assistant',
+            content: delta,
+            timestamp: Date.now(),
+            isStreaming: false,
+          });
+        }
+        continue;
+      }
+
+      if (type === 'assistant.message') {
+        // Mark current assistant done
+        assistantId = null;
+        continue;
+      }
+
+      if (type === 'tool.start') {
+        const toolName = String(ev.toolName ?? '');
+        if (HIDDEN_TOOLS.has(toolName)) continue;
+        const args = (ev.args ?? {}) as Record<string, unknown>;
+        const tt = toolTypeFromName(toolName);
+        const title = toolTitleFromArgs(toolName, tt, args);
+        restored.push({
+          id: generateId(),
+          type: 'tool_call',
+          toolType: tt,
+          title,
+          data: { ...args, completed: true, success: true, _toolName: toolName },
+          toolCallId: String(ev.toolCallId ?? ''),
+          timestamp: Date.now(),
+        });
+        assistantId = null;
+        continue;
+      }
+    }
+
+    setMessages(restored);
+  }, []); // Only on mount
 
   // Handle userPrompt changes
   useEffect(() => {

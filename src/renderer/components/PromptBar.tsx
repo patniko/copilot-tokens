@@ -17,6 +17,7 @@ interface PromptBarProps {
   onNewSession?: () => void;
   onLoadSession?: () => void;
   onSplitSession?: () => void;
+  onBadge?: (badgeId: string) => void;
 }
 
 const LINE_HEIGHT = 24;
@@ -28,11 +29,12 @@ function isImageFile(name: string): boolean {
   return IMAGE_EXTENSIONS.has(ext);
 }
 
-export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, onBrowseCwd, onNewSession, onLoadSession, onSplitSession }: PromptBarProps) {
+export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, onBrowseCwd, onNewSession, onLoadSession, onSplitSession, onBadge }: PromptBarProps) {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [sendMenuOpen, setSendMenuOpen] = useState(false);
+  const [queue, setQueue] = useState<{ prompt: string; attachments?: { path: string }[] }[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { play } = useSound();
@@ -45,16 +47,28 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
     [onGeneratingChange],
   );
 
-  // Listen for session.idle to stop generating
+  // Listen for session.idle to stop generating and drain queue
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
   useEffect(() => {
     if (!window.copilotAPI?.onEvent) return;
     const cleanup = window.copilotAPI.onEvent((event: unknown) => {
       if (event && typeof event === 'object' && 'type' in event && (event as { type: string }).type === 'session.idle') {
-        setGenerating(false);
+        // Drain the next queued message
+        const q = queueRef.current;
+        if (q.length > 0) {
+          const next = q[0];
+          setQueue(prev => prev.slice(1));
+          window.copilotAPI?.sendMessage(next.prompt, next.attachments, panelId);
+          onSend?.(next.prompt, next.attachments);
+          // Stay in generating state
+        } else {
+          setGenerating(false);
+        }
       }
     }, panelId);
     return cleanup;
-  }, [setGenerating, panelId]);
+  }, [setGenerating, panelId, onSend]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -100,18 +114,28 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
       return;
     }
     const trimmed = prompt.trim();
-    if ((!trimmed && attachments.length === 0) || isGenerating) return;
+    if (!trimmed && attachments.length === 0) return;
     play('leverPull');
     const atts = attachments.length > 0 ? attachments.map(a => ({ path: a.path })) : undefined;
-    window.copilotAPI?.sendMessage(trimmed || 'Describe this image.', atts, panelId);
-    setGenerating(true);
-    onSend?.(trimmed || 'Describe this image.', atts);
+    const message = trimmed || 'Describe this image.';
+
+    if (isGenerating) {
+      // Queue the message for when the current turn finishes
+      setQueue(prev => [...prev, { prompt: message, attachments: atts }]);
+      onBadge?.('badge-first-queue');
+    } else {
+      window.copilotAPI?.sendMessage(message, atts, panelId);
+      setGenerating(true);
+    }
+    if (atts) onBadge?.('badge-first-image');
+    onSend?.(message, atts);
     setPrompt('');
     setAttachments([]);
-  }, [cwd, onBrowseCwd, prompt, attachments, isGenerating, play, setGenerating, onSend, panelId]);
+  }, [cwd, onBrowseCwd, prompt, attachments, isGenerating, play, setGenerating, onSend, panelId, onBadge]);
 
   const handleAbort = useCallback(() => {
     window.copilotAPI?.abort(panelId);
+    setQueue([]);
     setGenerating(false);
   }, [setGenerating, panelId]);
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -207,6 +231,28 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
         )}
       </AnimatePresence>
 
+      {/* Queued messages indicator */}
+      <AnimatePresence>
+        {queue.length > 0 && (
+          <motion.div
+            className="flex items-center gap-2 mb-2 px-1"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+          >
+            <span className="text-[10px] text-[var(--accent-purple)] font-medium">
+              {queue.length} queued {queue.length === 1 ? 'message' : 'messages'}
+            </span>
+            <button
+              onClick={() => setQueue([])}
+              className="text-[10px] text-[var(--text-secondary)] hover:text-red-400 transition-colors cursor-pointer"
+            >
+              clear
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex items-center gap-3">
         {/* Attach button */}
         <button
@@ -234,7 +280,7 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={attachments.length > 0 ? 'Add a message or press Enter to send…' : 'Enter your prompt…'}
+          placeholder={attachments.length > 0 ? 'Add a message or press Enter to send…' : isGenerating ? 'Type to steer or queue next message…' : 'Enter your prompt…'}
           rows={1}
           className="flex-1 bg-transparent outline-none text-[var(--text-primary)] placeholder-[var(--text-secondary)] resize-none rounded-lg border border-[var(--border-color)] px-4 py-3 focus:border-[var(--accent-purple)] focus:shadow-[0_0_8px_var(--accent-purple)] transition-shadow"
           style={{ lineHeight: `${LINE_HEIGHT}px` }}
