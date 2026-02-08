@@ -36,6 +36,7 @@ interface UtilAPI {
 interface ModelAPI {
   get(): Promise<string>;
   set(model: string): Promise<void>;
+  list(): Promise<{ id: string; name: string }[]>;
 }
 
 declare global {

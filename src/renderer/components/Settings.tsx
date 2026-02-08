@@ -21,6 +21,8 @@ export default function Settings({ isOpen, onClose, onCwdChange, onModelChange }
   const { theme, setTheme, themes } = useTheme();
   const { play, enabled, setEnabled, volume, setVolume } = useSound();
   const [model, setModel] = useState('claude-sonnet-4');
+  const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [cwd, setCwd] = useState('');
   const [recentCwds, setRecentCwds] = useState<string[]>([]);
 
@@ -31,6 +33,13 @@ export default function Settings({ isOpen, onClose, onCwdChange, onModelChange }
     }
     if (isOpen && window.modelAPI) {
       window.modelAPI.get().then(setModel);
+      if (availableModels.length === 0) {
+        setModelsLoading(true);
+        window.modelAPI.list().then((models) => {
+          setAvailableModels(models);
+          setModelsLoading(false);
+        }).catch(() => setModelsLoading(false));
+      }
     }
   }, [isOpen]);
 
@@ -191,34 +200,27 @@ export default function Settings({ isOpen, onClose, onCwdChange, onModelChange }
                 <label className="block text-sm uppercase tracking-wider text-[var(--text-secondary)] mb-3">
                   AI Model
                 </label>
-                <select
-                  value={model}
-                  onChange={(e) => {
-                    const m = e.target.value;
-                    setModel(m);
-                    window.modelAPI?.set(m);
-                    onModelChange?.(m);
-                  }}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm cursor-pointer"
-                >
-                  <optgroup label="Claude">
-                    <option value="claude-sonnet-4">Claude Sonnet 4</option>
-                    <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
-                    <option value="claude-haiku-4.5">Claude Haiku 4.5</option>
-                    <option value="claude-opus-4">Claude Opus 4</option>
-                  </optgroup>
-                  <optgroup label="GPT">
-                    <option value="gpt-4.1">GPT-4.1</option>
-                    <option value="gpt-4.1-mini">GPT-4.1 Mini</option>
-                    <option value="gpt-4o">GPT-4o</option>
-                    <option value="gpt-4o-mini">GPT-4o Mini</option>
-                  </optgroup>
-                  <optgroup label="Other">
-                    <option value="o3">o3</option>
-                    <option value="o4-mini">o4-mini</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                  </optgroup>
-                </select>
+                {modelsLoading ? (
+                  <div className="px-3 py-2 text-sm text-[var(--text-secondary)]">Loading models…</div>
+                ) : (
+                  <select
+                    value={model}
+                    onChange={(e) => {
+                      const m = e.target.value;
+                      setModel(m);
+                      window.modelAPI?.set(m);
+                      onModelChange?.(m);
+                    }}
+                    className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm cursor-pointer"
+                  >
+                    {availableModels.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                    {availableModels.length === 0 && (
+                      <option value={model}>{model}</option>
+                    )}
+                  </select>
+                )}
                 <p className="mt-1.5 text-[10px] text-[var(--text-secondary)]">
                   Changes take effect on next message
                 </p>

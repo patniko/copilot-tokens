@@ -66,6 +66,12 @@ export class CopilotService {
     return this.model;
   }
 
+  async listModels(): Promise<{ id: string; name: string }[]> {
+    await this.ensureStarted();
+    const models = await this.client!.listModels();
+    return models.map(m => ({ id: m.id, name: m.name }));
+  }
+
   async ensureStarted(): Promise<void> {
     if (!this.started) {
       const { CopilotClient } = await loadSDK();

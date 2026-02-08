@@ -61,6 +61,9 @@ contextBridge.exposeInMainWorld('modelAPI', {
   set(model: string): Promise<void> {
     return ipcRenderer.invoke('model:set', model);
   },
+  list(): Promise<{ id: string; name: string }[]> {
+    return ipcRenderer.invoke('model:list');
+  },
 });
 
 contextBridge.exposeInMainWorld('cwdAPI', {

@@ -166,4 +166,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     stats.setModel(model);
     copilot.setModel(model);
   });
+
+  ipcMain.handle('model:list', async () => {
+    return copilot.listModels();
+  });
 }

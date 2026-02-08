@@ -25,6 +25,18 @@ export default function App() {
   const latestStatsRef = useRef<DashboardStats | null>(null);
   const sessionStartRef = useRef<number | null>(null);
 
+  // Reset key — incrementing remounts ReelArea + TokenDashboard
+  const [resetKey, setResetKey] = useState(0);
+
+  const handleReset = useCallback(() => {
+    setInputTokens(0);
+    setChangedFiles([]);
+    setUserPrompt(null);
+    latestStatsRef.current = null;
+    sessionStartRef.current = null;
+    setResetKey((k) => k + 1);
+  }, []);
+
   // Load CWD + git info + model on mount
   useEffect(() => {
     if (window.cwdAPI) {
@@ -135,6 +147,13 @@ export default function App() {
           </div>
           <div className="absolute right-4 flex items-center gap-2">
             <button
+              onClick={handleReset}
+              className="text-xl hover:scale-110 transition-transform cursor-pointer"
+              title="New Chat"
+            >
+              🔄
+            </button>
+            <button
               onClick={() => { setSettingsOpen(true); setLeaderboardOpen(false); }}
               className="text-xl hover:scale-110 transition-transform cursor-pointer"
               title="Settings"
@@ -209,13 +228,13 @@ export default function App() {
           {/* Token Dashboard (Left Panel) */}
           <aside className="w-64 shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] p-4 flex flex-col gap-4 overflow-y-auto">
             <h2 className="text-sm uppercase tracking-wider text-[var(--text-secondary)]">Token Dashboard</h2>
-            <TokenDashboard inputTokenCount={inputTokens} onStatsUpdate={handleStatsUpdate} />
+            <TokenDashboard key={resetKey} inputTokenCount={inputTokens} onStatsUpdate={handleStatsUpdate} />
             <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} />
           </aside>
 
           {/* Reel / Conversation Area (Center) */}
           <section className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            <ReelArea userPrompt={userPrompt} onUsage={handleUsage} />
+            <ReelArea key={resetKey} userPrompt={userPrompt} onUsage={handleUsage} />
 
             {/* Prompt Bar (Bottom) */}
             <PromptBar onSend={handleSend} />
