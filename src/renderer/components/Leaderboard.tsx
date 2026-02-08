@@ -47,6 +47,7 @@ export default function Leaderboard({ isOpen, onClose, onReplaySession }: Leader
   const [sessions, setSessions] = useState<RankedSession[]>([]);
   const [lifetime, setLifetime] = useState<LifetimeStats | null>(null);
   const [bests, setBests] = useState<Partial<Record<keyof SessionStats, number>>>({});
+  const [commitBests, setCommitBests] = useState<{ linesAdded: number; linesRemoved: number } | null>(null);
   const [replayTimestamps, setReplayTimestamps] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -56,11 +57,13 @@ export default function Leaderboard({ isOpen, onClose, onReplaySession }: Leader
       window.statsAPI.getLifetimeStats(),
       window.statsAPI.getAllTimeBests(),
       window.statsAPI.getSessionEvents(),
-    ]).then(([s, l, b, events]) => {
+      window.statsAPI.getCommitBests(),
+    ]).then(([s, l, b, events, cb]) => {
       setSessions(s as RankedSession[]);
       setLifetime(l);
       setBests(b);
       setReplayTimestamps(new Set(events.map((e: { sessionTimestamp: number }) => e.sessionTimestamp)));
+      if (cb.linesAdded > 0 || cb.linesRemoved > 0) setCommitBests(cb);
     });
   }, [isOpen]);
 
@@ -226,6 +229,35 @@ export default function Leaderboard({ isOpen, onClose, onReplaySession }: Leader
                         </div>
                       );
                     })}
+                  </div>
+                </section>
+              )}
+
+              {/* Commit Bests */}
+              {commitBests && (
+                <section>
+                  <h3 className="text-xs uppercase tracking-wider text-[var(--text-secondary)] mb-2">
+                    Commit Bests
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="glass-card p-3 flex items-center gap-2">
+                      <span className="text-lg">📝</span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-[var(--accent-green)] truncate">
+                          {formatNumber(commitBests.linesAdded)}
+                        </div>
+                        <div className="text-[10px] text-[var(--text-secondary)]">Most Lines Added</div>
+                      </div>
+                    </div>
+                    <div className="glass-card p-3 flex items-center gap-2">
+                      <span className="text-lg">🗑️</span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-[var(--accent-red)] truncate">
+                          {formatNumber(commitBests.linesRemoved)}
+                        </div>
+                        <div className="text-[10px] text-[var(--text-secondary)]">Most Lines Removed</div>
+                      </div>
+                    </div>
                   </div>
                 </section>
               )}

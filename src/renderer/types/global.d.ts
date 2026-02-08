@@ -17,6 +17,7 @@ interface CopilotAPI {
 }
 
 interface StatsAPI {
+  getAllSessions(): Promise<(SessionStats & { timestamp: number; cwd?: string })[]>;
   getTopSessions(limit: number): Promise<unknown[]>;
   getAllTimeBests(): Promise<Partial<Record<keyof SessionStats, number>>>;
   recordSession(stats: SessionStats): Promise<void>;
@@ -28,6 +29,7 @@ interface StatsAPI {
   saveSessionEvents(sessionTimestamp: number, events: SessionEvent[]): Promise<void>;
   getSessionEvents(): Promise<SessionEventLog[]>;
   getSessionEventLog(sessionTimestamp: number): Promise<SessionEventLog | undefined>;
+  getCommitBests(): Promise<{ linesAdded: number; linesRemoved: number }>;
   getLevelProgress(): Promise<LevelProgressData>;
   setLevelProgress(progress: LevelProgressData): Promise<void>;
 }

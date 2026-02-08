@@ -1,5 +1,6 @@
 import Store from 'electron-store';
 import { normalize, resolve } from 'node:path';
+import { DATA_DIR } from './data-dir';
 
 export interface PermissionRule {
   kind: string;         // 'write' | 'shell' | 'read'
@@ -12,6 +13,7 @@ interface PermissionStoreSchema {
 
 const store = new Store<PermissionStoreSchema>({
   name: 'permissions',
+  cwd: DATA_DIR,
   defaults: {
     permissionRules: [],
   },

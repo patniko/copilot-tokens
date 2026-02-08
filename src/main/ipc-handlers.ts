@@ -112,6 +112,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return stats.getAllTimeBests();
   });
 
+  ipcMain.handle('stats:getAllSessions', () => {
+    return stats.getAllSessions();
+  });
+
   ipcMain.handle('stats:recordSession', (_event, sessionStats: SessionStats) => {
     stats.recordSession(sessionStats);
   });
@@ -156,6 +160,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     stats.setLevelProgress(progress);
   });
 
+  ipcMain.handle('stats:getCommitBests', () => {
+    return stats.getCommitBests();
+  });
+
   ipcMain.handle('git:commit', async (_event, message: string, _files: string[]) => {
     const cwd = stats.getCwd();
     if (!cwd) return { success: false, hash: undefined };
@@ -176,7 +184,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
           }
           // Extract short hash from output like "[main abc1234] message"
           const hashMatch = stdout.match(/\[[\w/-]+ ([a-f0-9]+)\]/);
-          resolve({ success: true, hash: hashMatch?.[1] });
+
+          // Record commit stats for all-time bests
+          execFile('git', ['-C', cwd, 'show', '--numstat', '--format=', 'HEAD'], (numErr, numOut) => {
+            if (!numErr && numOut) {
+              const { linesAdded, linesRemoved } = parseNumstat(numOut);
+              stats.recordCommitBests(linesAdded, linesRemoved);
+            }
+            resolve({ success: true, hash: hashMatch?.[1] });
+          });
         });
       });
     });

@@ -1,8 +1,10 @@
 import Store from 'electron-store';
+import { DATA_DIR } from './data-dir';
 import type { MilestonePack, SoundPack, ThemePack, PackStoreSchema } from '../renderer/lib/pack-types';
 
 const store = new Store<PackStoreSchema>({
   name: 'packs',
+  cwd: DATA_DIR,
   defaults: {
     milestonePacks: [],
     soundPacks: [],

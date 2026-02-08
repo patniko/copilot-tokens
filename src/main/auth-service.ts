@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { net } from 'electron';
 import Store from 'electron-store';
+import { DATA_DIR } from './data-dir';
 
 export interface GitHubUser {
   login: string;
@@ -30,6 +31,7 @@ const OAUTH_CLIENT_ID = 'Iv23ctpsQOCyDp2e7kOD';
 
 const store = new Store<AuthStoreSchema>({
   name: 'auth',
+  cwd: DATA_DIR,
   defaults: {
     oauthToken: null,
     oauthUser: null,

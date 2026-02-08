@@ -1,4 +1,5 @@
 import Store from 'electron-store';
+import { DATA_DIR } from './data-dir';
 
 export interface SessionStats {
   inputTokens: number;
@@ -13,6 +14,7 @@ export interface SessionStats {
 
 interface StoredSession extends SessionStats {
   timestamp: number;
+  cwd?: string;
 }
 
 export interface RankedSession extends StoredSession {
@@ -56,9 +58,15 @@ export interface LevelProgressData {
   };
 }
 
+export interface CommitBests {
+  linesAdded: number;
+  linesRemoved: number;
+}
+
 interface StoreSchema {
   sessions: StoredSession[];
   allTimeBests: Partial<Record<keyof SessionStats, number>>;
+  commitBests: CommitBests;
   lifetimeTokens: number;
   longestStreak: number;
   currentStreak: number;
@@ -73,9 +81,11 @@ interface StoreSchema {
 }
 
 const store = new Store<StoreSchema>({
+  cwd: DATA_DIR,
   defaults: {
     sessions: [],
     allTimeBests: {},
+    commitBests: { linesAdded: 0, linesRemoved: 0 },
     lifetimeTokens: 0,
     longestStreak: 0,
     currentStreak: 0,
@@ -96,7 +106,7 @@ const store = new Store<StoreSchema>({
 export class StatsService {
   recordSession(stats: SessionStats): void {
     const sessions = store.get('sessions');
-    sessions.push({ ...stats, timestamp: Date.now() });
+    sessions.push({ ...stats, timestamp: Date.now(), cwd: store.get('currentCwd') || undefined });
     store.set('sessions', sessions);
 
     // Update all-time bests
@@ -166,6 +176,10 @@ export class StatsService {
     return rank;
   }
 
+  getAllSessions(): StoredSession[] {
+    return store.get('sessions').slice().sort((a, b) => b.timestamp - a.timestamp);
+  }
+
   // CWD management
 
   getCwd(): string {
@@ -189,6 +203,19 @@ export class StatsService {
 
   setModel(model: string): void {
     store.set('currentModel', model);
+  }
+
+  // Commit best tracking
+
+  recordCommitBests(linesAdded: number, linesRemoved: number): void {
+    const bests = store.get('commitBests');
+    if (linesAdded > bests.linesAdded) bests.linesAdded = linesAdded;
+    if (linesRemoved > bests.linesRemoved) bests.linesRemoved = linesRemoved;
+    store.set('commitBests', bests);
+  }
+
+  getCommitBests(): CommitBests {
+    return store.get('commitBests');
   }
 
   // Achievement tracking

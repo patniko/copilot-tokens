@@ -12,6 +12,7 @@ import AvatarMenu from './components/AvatarMenu';
 import PackStudio from './components/PackStudio';
 import TrophyCase from './components/TrophyCase';
 import SessionReplay from './components/SessionReplay';
+import SessionBrowser from './components/SessionBrowser';
 import LevelBadge from './components/LevelBadge';
 import LevelUpOverlay from './components/LevelUpOverlay';
 import { useSessionRecorder } from './hooks/useSessionRecorder';
@@ -27,6 +28,8 @@ export default function App() {
   const [packStudioOpen, setPackStudioOpen] = useState(false);
   const [trophyCaseOpen, setTrophyCaseOpen] = useState(false);
   const [replaySessionTimestamp, setReplaySessionTimestamp] = useState<number | null>(null);
+  const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
+  const [sessionMenuOpen, setSessionMenuOpen] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState<number | null>(null);
   const [userPrompt, setUserPrompt] = useState<string | null>(null);
   const [changedFiles, setChangedFiles] = useState<string[]>([]);
@@ -264,13 +267,35 @@ export default function App() {
           </div>
           <div className="absolute right-4 flex items-center gap-2">
             <LevelBadge compact />
-            <button
-              onClick={handleReset}
-              className="text-xl hover:scale-110 transition-transform cursor-pointer"
-              title="New Chat"
-            >
-              🔄
-            </button>
+            <div className="relative flex items-center">
+              <button
+                onClick={handleReset}
+                className="text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--accent-gold)] hover:scale-110 transition-all cursor-pointer px-1.5 py-0.5 rounded-l border border-[var(--border-color)] border-r-0 bg-[var(--bg-primary)]"
+                title="New Chat"
+              >
+                +
+              </button>
+              <button
+                onClick={() => setSessionMenuOpen(!sessionMenuOpen)}
+                className="text-[var(--text-secondary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer px-1 py-0.5 rounded-r border border-[var(--border-color)] bg-[var(--bg-primary)] flex items-center"
+                title="Session options"
+              >
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${sessionMenuOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
+              </button>
+              {sessionMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setSessionMenuOpen(false)} />
+                  <div className="absolute top-full right-0 mt-1 z-50 w-40 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl overflow-hidden">
+                    <button
+                      onClick={() => { setSessionMenuOpen(false); setSessionBrowserOpen(true); }}
+                      className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer"
+                    >
+                      View Sessions
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <AvatarMenu
               onOpenSettings={() => { setSettingsOpen(true); setLeaderboardOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
               onOpenLeaderboard={() => { setLeaderboardOpen(true); setSettingsOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
@@ -436,10 +461,25 @@ export default function App() {
 
           {/* Reel / Conversation Area (Center) */}
           <section className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            <ReelArea key={resetKey} userPrompt={userPrompt} onUsage={handleUsage} permissionRequest={permissionRequest} onPermissionRespond={handlePermissionRespond} />
-
-            {/* Prompt Bar (Bottom) */}
-            <PromptBar onSend={handleSend} />
+            {sessionBrowserOpen ? (
+              <SessionBrowser
+                onSelect={(session) => {
+                  setSessionBrowserOpen(false);
+                  if (session.cwd) {
+                    setCwd(session.cwd);
+                    window.cwdAPI?.set(session.cwd);
+                    refreshGitInfo(session.cwd);
+                  }
+                  handleReset();
+                }}
+                onClose={() => setSessionBrowserOpen(false)}
+              />
+            ) : (
+              <>
+                <ReelArea key={resetKey} userPrompt={userPrompt} onUsage={handleUsage} permissionRequest={permissionRequest} onPermissionRespond={handlePermissionRespond} />
+                <PromptBar onSend={handleSend} />
+              </>
+            )}
           </section>
         </main>
         <Leaderboard isOpen={leaderboardOpen} onClose={() => setLeaderboardOpen(false)} onReplaySession={(ts) => { setLeaderboardOpen(false); setReplaySessionTimestamp(ts); }} />

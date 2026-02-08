@@ -49,6 +49,9 @@ contextBridge.exposeInMainWorld('copilotAPI', {
 });
 
 contextBridge.exposeInMainWorld('statsAPI', {
+  getAllSessions(): Promise<{ timestamp: number; cwd?: string; inputTokens: number; outputTokens: number; messagesCount: number; filesChanged: number; toolCalls: number; durationMs: number }[]> {
+    return ipcRenderer.invoke('stats:getAllSessions');
+  },
   getTopSessions(limit: number): Promise<unknown[]> {
     return ipcRenderer.invoke('stats:getTopSessions', limit);
   },
@@ -81,6 +84,9 @@ contextBridge.exposeInMainWorld('statsAPI', {
   },
   getSessionEventLog(sessionTimestamp: number): Promise<{ sessionTimestamp: number; events: { type: string; timestamp: number; data?: Record<string, unknown> }[] } | undefined> {
     return ipcRenderer.invoke('stats:getSessionEventLog', sessionTimestamp);
+  },
+  getCommitBests(): Promise<{ linesAdded: number; linesRemoved: number }> {
+    return ipcRenderer.invoke('stats:getCommitBests');
   },
   getLevelProgress(): Promise<{ level: number; categoryProgress: { tokens: number; messages: number; toolCalls: number; files: number; lines: number } }> {
     return ipcRenderer.invoke('stats:getLevelProgress');
