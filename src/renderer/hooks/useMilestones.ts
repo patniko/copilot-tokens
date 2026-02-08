@@ -18,6 +18,7 @@ export function useMilestones() {
   const [activeMilestone, setActiveMilestone] = useState<Milestone | null>(null);
   const previousStatsRef = useRef<DashboardStats>(EMPTY_STATS);
   const queueRef = useRef<Milestone[]>([]);
+  const firedRef = useRef<Set<string>>(new Set());
 
   const showNext = useCallback(() => {
     if (queueRef.current.length > 0) {
@@ -33,10 +34,13 @@ export function useMilestones() {
 
   const checkStats = useCallback(
     (currentStats: DashboardStats) => {
-      const triggered = checkMilestones(currentStats, previousStatsRef.current);
+      const triggered = checkMilestones(currentStats, previousStatsRef.current)
+        .filter((m) => !firedRef.current.has(m.id));
       previousStatsRef.current = currentStats;
 
       if (triggered.length === 0) return;
+
+      for (const m of triggered) firedRef.current.add(m.id);
 
       if (activeMilestone === null && queueRef.current.length === 0) {
         setActiveMilestone(triggered[0]);
