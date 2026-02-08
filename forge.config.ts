@@ -4,11 +4,13 @@ import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
 import { VitePlugin } from '@electron-forge/plugin-vite';
+import { cpSync } from 'fs';
+import { resolve, join } from 'path';
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: '{node_modules/@github/copilot/**,node_modules/@github/copilot-sdk/**}',
+      unpack: '**/node_modules/@github/copilot/**',
     },
     icon: './logo-128',
   },
@@ -19,6 +21,16 @@ const config: ForgeConfig = {
     new MakerDeb({}),
     new MakerRpm({}),
   ],
+  hooks: {
+    // Copy the Copilot CLI runtime into the packaged app so the SDK
+    // can spawn it as a subprocess at runtime.
+    packageAfterCopy: async (_config, buildPath) => {
+      const projectRoot = resolve(__dirname);
+      const src = join(projectRoot, 'node_modules', '@github', 'copilot');
+      const dest = join(buildPath, 'node_modules', '@github', 'copilot');
+      cpSync(src, dest, { recursive: true });
+    },
+  },
   plugins: [
     new VitePlugin({
       build: [
