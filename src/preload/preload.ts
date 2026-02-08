@@ -46,6 +46,12 @@ contextBridge.exposeInMainWorld('utilAPI', {
   saveTempImage(buffer: ArrayBuffer, ext: string): Promise<string> {
     return ipcRenderer.invoke('util:saveTempImage', Buffer.from(buffer), ext);
   },
+  openInVSCode(dir: string): void {
+    ipcRenderer.invoke('util:openInVSCode', dir);
+  },
+  openCopilotShell(dir: string): void {
+    ipcRenderer.invoke('util:openCopilotShell', dir);
+  },
 });
 
 contextBridge.exposeInMainWorld('cwdAPI', {

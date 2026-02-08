@@ -131,12 +131,34 @@ export default function App() {
               </span>
             </>
           )}
-          <button
-            onClick={handleBrowseCwd}
-            className="ml-auto text-[var(--text-secondary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer text-[10px] uppercase tracking-wider"
-          >
-            Change
-          </button>
+          <div className="ml-auto flex items-center gap-1">
+            {cwd && (
+              <>
+                <button
+                  onClick={() => window.utilAPI?.openInVSCode(cwd)}
+                  className="px-2 py-0.5 rounded text-[var(--text-secondary)] hover:text-[var(--accent-blue)] hover:bg-[var(--accent-blue)]/10 transition-colors cursor-pointer flex items-center gap-1"
+                  title="Open in VS Code"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.583 2.213l-12.2 11.37L2 11.287l1.96-1.1 3.78 2.58L17.583.213V2.213zM5.383 13.97L2 15.71l3.383 2.297L17.583 7.07V21.787l-12.2-7.817zm12.2 9.6l4.417-2.297V3.517L17.583 1.22v21.563z"/></svg>
+                  <span className="text-[10px]">Code</span>
+                </button>
+                <button
+                  onClick={() => window.utilAPI?.openCopilotShell(cwd)}
+                  className="px-2 py-0.5 rounded text-[var(--text-secondary)] hover:text-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/10 transition-colors cursor-pointer flex items-center gap-1"
+                  title="Open Copilot in terminal"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                  <span className="text-[10px]">Terminal</span>
+                </button>
+              </>
+            )}
+            <button
+              onClick={handleBrowseCwd}
+              className="px-2 py-0.5 rounded text-[var(--text-secondary)] hover:text-[var(--accent-gold)] hover:bg-[var(--accent-gold)]/10 transition-colors cursor-pointer text-[10px]"
+            >
+              Change
+            </button>
+          </div>
         </div>
 
         {/* Main Content */}

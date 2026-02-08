@@ -110,19 +110,18 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
         }
 
         case 'assistant.message': {
-          // Final message — mark streaming done
+          // Final message — just mark streaming done, content already accumulated from deltas
           setMessages((prev) => {
             const currentId = currentAssistantIdRef.current;
             if (currentId) {
               return prev.map((m) =>
                 m.id === currentId && m.type === 'assistant'
-                  ? { ...m, content: event.content, isStreaming: false }
+                  ? { ...m, isStreaming: false }
                   : m,
               );
             }
             return prev;
           });
-          currentAssistantIdRef.current = null;
           break;
         }
 

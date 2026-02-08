@@ -104,4 +104,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     await writeFile(filePath, buffer);
     return filePath;
   });
+
+  ipcMain.handle('util:openInVSCode', (_event, dir: string) => {
+    if (dir) execFile('code', [dir], { env: process.env });
+  });
+
+  ipcMain.handle('util:openCopilotShell', (_event, dir: string) => {
+    if (!dir) return;
+    // Open Terminal.app with copilot running in the specified directory
+    const script = `tell application "Terminal" to do script "cd ${dir.replace(/"/g, '\\"')} && copilot"`;
+    execFile('osascript', ['-e', script]);
+  });
 }

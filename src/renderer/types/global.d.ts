@@ -28,6 +28,8 @@ interface CwdAPI {
 
 interface UtilAPI {
   saveTempImage(buffer: ArrayBuffer, ext: string): Promise<string>;
+  openInVSCode(dir: string): void;
+  openCopilotShell(dir: string): void;
 }
 
 declare global {
