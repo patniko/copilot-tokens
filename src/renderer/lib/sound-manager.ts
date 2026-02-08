@@ -1,4 +1,4 @@
-export type SoundName = 'leverPull' | 'tokenTick' | 'milestone' | 'jackpot' | 'commit' | 'error';
+export type SoundName = 'leverPull' | 'tokenTick' | 'milestone' | 'jackpot' | 'commit' | 'error' | 'celebration100k' | 'celebration500k';
 
 type SoundGenerator = (ctx: AudioContext, dest: GainNode) => void;
 
@@ -127,6 +127,123 @@ const sounds: Record<SoundName, SoundGenerator> = {
     osc.connect(oscGain).connect(dest);
     osc.start(t + 0.05);
     osc.stop(t + 0.25);
+  },
+
+  // 100K celebration — triumphant fanfare: C5-E5-G5-C6 arpeggiated with harmonics + shimmer
+  celebration100k(ctx, dest) {
+    const t = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+    notes.forEach((freq, i) => {
+      const start = t + i * 0.12;
+      // Main tone
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.35, start + 0.02);
+      gain.gain.setValueAtTime(0.35, start + 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
+      osc.connect(gain).connect(dest);
+      osc.start(start);
+      osc.stop(start + 0.5);
+
+      // Harmonic overtone
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'triangle';
+      osc2.frequency.value = freq * 2;
+      const gain2 = ctx.createGain();
+      gain2.gain.setValueAtTime(0, start);
+      gain2.gain.linearRampToValueAtTime(0.12, start + 0.02);
+      gain2.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+      osc2.connect(gain2).connect(dest);
+      osc2.start(start);
+      osc2.stop(start + 0.35);
+    });
+
+    // Final shimmer chord (all notes together)
+    const chordStart = t + 0.55;
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, chordStart);
+      gain.gain.linearRampToValueAtTime(0.2, chordStart + 0.03);
+      gain.gain.setValueAtTime(0.2, chordStart + 0.3);
+      gain.gain.exponentialRampToValueAtTime(0.001, chordStart + 0.8);
+      osc.connect(gain).connect(dest);
+      osc.start(chordStart);
+      osc.stop(chordStart + 0.8);
+    });
+  },
+
+  // 500K celebration — epic orchestral: rising sweep + fanfare + bell tower finale
+  celebration500k(ctx, dest) {
+    const t = ctx.currentTime;
+
+    // Rising sweep
+    const sweep = ctx.createOscillator();
+    sweep.type = 'sawtooth';
+    sweep.frequency.setValueAtTime(200, t);
+    sweep.frequency.exponentialRampToValueAtTime(1200, t + 0.6);
+    const sweepFilter = ctx.createBiquadFilter();
+    sweepFilter.type = 'lowpass';
+    sweepFilter.frequency.setValueAtTime(400, t);
+    sweepFilter.frequency.exponentialRampToValueAtTime(4000, t + 0.6);
+    const sweepGain = ctx.createGain();
+    sweepGain.gain.setValueAtTime(0.2, t);
+    sweepGain.gain.linearRampToValueAtTime(0.35, t + 0.5);
+    sweepGain.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    sweep.connect(sweepFilter).connect(sweepGain).connect(dest);
+    sweep.start(t);
+    sweep.stop(t + 0.7);
+
+    // Fanfare notes: Bb4-D5-F5-Bb5-D6
+    const fanfare = [466.16, 587.33, 698.46, 932.33, 1174.66];
+    fanfare.forEach((freq, i) => {
+      const start = t + 0.6 + i * 0.1;
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.2, start + 0.02);
+      gain.gain.setValueAtTime(0.2, start + 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 3000;
+      osc.connect(filter).connect(gain).connect(dest);
+      osc.start(start);
+      osc.stop(start + 0.4);
+    });
+
+    // Bell tower finale — 3 layered bell strikes
+    [0, 0.2, 0.4].forEach((delay, i) => {
+      const bellStart = t + 1.2 + delay;
+      const freq = [1046.5, 1318.5, 1568][i]; // C6, E6, G6
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      // Bell-like decay
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.4, bellStart);
+      gain.gain.exponentialRampToValueAtTime(0.001, bellStart + 1.0);
+      // Slight detuned second oscillator for richness
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'sine';
+      osc2.frequency.value = freq * 1.002;
+      const gain2 = ctx.createGain();
+      gain2.gain.setValueAtTime(0.25, bellStart);
+      gain2.gain.exponentialRampToValueAtTime(0.001, bellStart + 0.8);
+      osc.connect(gain).connect(dest);
+      osc2.connect(gain2).connect(dest);
+      osc.start(bellStart);
+      osc.stop(bellStart + 1.0);
+      osc2.start(bellStart);
+      osc2.stop(bellStart + 0.8);
+    });
   },
 
   // Low buzz — 200ms sawtooth wave at 150Hz

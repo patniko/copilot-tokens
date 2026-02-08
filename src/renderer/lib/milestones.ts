@@ -7,16 +7,16 @@ export interface Milestone {
   label: string;
   emoji: string;
   effect: 'sparkle' | 'banner' | 'confetti' | 'jackpot' | 'mega';
-  sound: 'milestone' | 'jackpot';
+  sound: 'milestone' | 'jackpot' | 'celebration100k' | 'celebration500k';
 }
 
 export const MILESTONES: Milestone[] = [
   // Token milestones
   { id: 'tokens-10k',  threshold: 10_000,    metric: 'totalTokens',  label: '10K!',               emoji: '✨', effect: 'sparkle',  sound: 'milestone' },
   { id: 'tokens-50k',  threshold: 50_000,    metric: 'totalTokens',  label: '50K TOKENS!',        emoji: '🔥', effect: 'banner',   sound: 'milestone' },
-  { id: 'tokens-100k', threshold: 100_000,   metric: 'totalTokens',  label: '100K TOKENS!',       emoji: '💯', effect: 'confetti',  sound: 'milestone' },
-  { id: 'tokens-500k', threshold: 500_000,   metric: 'totalTokens',  label: 'JACKPOT! 500K!',     emoji: '🎰', effect: 'jackpot',   sound: 'jackpot'   },
-  { id: 'tokens-1m',   threshold: 1_000_000, metric: 'totalTokens',  label: 'MILLION TOKEN CLUB', emoji: '🏆', effect: 'mega',      sound: 'jackpot'   },
+  { id: 'tokens-100k', threshold: 100_000,   metric: 'totalTokens',  label: '100K TOKENS!',       emoji: '💯', effect: 'confetti',  sound: 'celebration100k' },
+  { id: 'tokens-500k', threshold: 500_000,   metric: 'totalTokens',  label: 'JACKPOT! 500K!',     emoji: '🎰', effect: 'jackpot',   sound: 'celebration500k' },
+  { id: 'tokens-1m',   threshold: 1_000_000, metric: 'totalTokens',  label: 'MILLION TOKEN CLUB', emoji: '🏆', effect: 'mega',      sound: 'celebration500k' },
   // File milestones
   { id: 'files-10',    threshold: 10,        metric: 'filesChanged', label: 'Prolific!',          emoji: '📝', effect: 'banner',   sound: 'milestone' },
   { id: 'files-50',    threshold: 50,        metric: 'filesChanged', label: 'Architect Mode!',    emoji: '🏗️', effect: 'confetti',  sound: 'milestone' },
