@@ -86,13 +86,14 @@ body {
   background: var(--text-secondary);
 }
 
-/* Subtle logo bounce for active agent */
+/* Subtle logo bounce + flip for active agent */
 @keyframes logo-bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  40% { transform: translateY(-5px) rotate(180deg); }
+  60% { transform: translateY(-3px) rotate(360deg); }
 }
 .logo-bounce {
-  animation: logo-bounce 1s ease-in-out infinite;
+  animation: logo-bounce 1.2s ease-in-out infinite;
 }
 
 /* YOLO mode activation flash */

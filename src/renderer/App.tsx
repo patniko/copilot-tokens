@@ -41,6 +41,7 @@ export default function App() {
   // YOLO mode state
   const [yoloMode, setYoloMode] = useState(false);
   const [yoloFlash, setYoloFlash] = useState(false);
+  const [yoloCool, setYoloCool] = useState(false);
 
   // Agent activity state (for logo bounce)
   const [agentActive, setAgentActive] = useState(false);
@@ -405,6 +406,9 @@ export default function App() {
                 if (next) {
                   setYoloFlash(true);
                   setTimeout(() => setYoloFlash(false), 1200);
+                } else {
+                  setYoloCool(true);
+                  setTimeout(() => setYoloCool(false), 1500);
                 }
               }}
               className={`px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-1 font-bold text-[10px] ${
@@ -454,6 +458,15 @@ export default function App() {
           <div className="yolo-flash fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
             <div className="yolo-flash-text text-6xl font-black select-none">
               🔥 YOLO 🔥
+            </div>
+          </div>
+        )}
+
+        {/* YOLO deactivation — coward mode */}
+        {yoloCool && (
+          <div className="yolo-cool fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
+            <div className="yolo-cool-text text-5xl font-black select-none">
+              🐔 safe mode 🛡️
             </div>
           </div>
         )}
