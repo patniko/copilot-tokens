@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { homedir } from 'os';
+import { app } from 'electron';
 
 // Dynamic import to load ESM SDK in Electron's CJS main process
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -27,6 +28,33 @@ export type EventCallback = (event: CopilotEvent) => void;
 
 async function loadSDK(): Promise<typeof import('@github/copilot-sdk')> {
   return import('@github/copilot-sdk');
+}
+
+/** Resolve the path to the @github/copilot CLI entry point.
+ *  In packaged builds, ASAR-unpacked modules live at app.asar.unpacked/. */
+function resolveCopilotCliPath(): string {
+  // Try the ASAR-unpacked path first (packaged builds)
+  const appPath = app.getAppPath(); // e.g., /path/to/resources/app.asar
+  const unpackedPath = join(appPath + '.unpacked', 'node_modules', '@github', 'copilot', 'index.js');
+  if (existsSync(unpackedPath)) return unpackedPath;
+
+  // Try adjacent to the app path (non-asar packaged builds)
+  const adjacentPath = join(appPath, 'node_modules', '@github', 'copilot', 'index.js');
+  if (existsSync(adjacentPath)) return adjacentPath;
+
+  // Fallback: resolve from node_modules relative to this file (dev mode)
+  // Walk up from the compiled main.js to find the project root
+  let dir = __dirname;
+  for (let i = 0; i < 10; i++) {
+    const candidate = join(dir, 'node_modules', '@github', 'copilot', 'index.js');
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  // Last resort: let the SDK resolve it itself
+  return '';
 }
 
 /** Load MCP server configs from ~/.copilot/mcp-config.json and installed plugins */
@@ -136,7 +164,11 @@ export class CopilotService {
   async ensureStarted(): Promise<void> {
     if (!this.started) {
       const { CopilotClient } = await loadSDK();
-      this.client = new CopilotClient({ autoStart: false });
+      const cliPath = resolveCopilotCliPath();
+      console.log('[CopilotService] Resolved CLI path:', cliPath || '(SDK default)');
+      const opts: Record<string, unknown> = { autoStart: false };
+      if (cliPath) opts.cliPath = cliPath;
+      this.client = new CopilotClient(opts as ConstructorParameters<typeof CopilotClient>[0]);
       await this.client.start();
       this.started = true;
     }
