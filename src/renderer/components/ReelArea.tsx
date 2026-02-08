@@ -43,6 +43,9 @@ function toolTypeFromName(toolName: string): ToolCallMessage['toolType'] {
   return 'generic';
 }
 
+// Tools that should be silently hidden (just update UI state, not shown as tiles)
+const HIDDEN_TOOLS = new Set(['report_intent', 'ask_user']);
+
 function toolTitleFromArgs(toolName: string, toolType: ToolCallMessage['toolType'], args: Record<string, unknown>): string {
   if (toolType === 'bash') return String(args.command ?? toolName);
   if (toolType === 'file_edit') return String(args.path ?? toolName);
@@ -55,6 +58,7 @@ function toolTitleFromArgs(toolName: string, toolType: ToolCallMessage['toolType
 export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAreaProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [intent, setIntent] = useState<string | null>(null);
+  const [isWaiting, setIsWaiting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastPromptRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -70,6 +74,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, msg]);
+      setIsWaiting(true);
       onUserMessage?.(msg);
       currentAssistantIdRef.current = null;
     }
@@ -86,6 +91,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
 
       switch (event.type) {
         case 'assistant.message_delta': {
+          setIsWaiting(false);
           setMessages((prev) => {
             const currentId = currentAssistantIdRef.current;
             if (currentId) {
@@ -126,6 +132,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
         }
 
         case 'assistant.intent': {
+          setIsWaiting(false);
           setIntent(event.intent);
           break;
         }
@@ -136,6 +143,15 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
         }
 
         case 'tool.start': {
+          setIsWaiting(false);
+          // report_intent: update the intent badge instead of creating a tile
+          if (event.toolName === 'report_intent') {
+            const intentText = String(event.args.intent ?? event.args.description ?? '');
+            if (intentText) setIntent(intentText);
+            break;
+          }
+          // Skip other hidden tools
+          if (HIDDEN_TOOLS.has(event.toolName)) break;
           const tt = toolTypeFromName(event.toolName);
           const title = toolTitleFromArgs(event.toolName, tt, event.args);
           const msg: ToolCallMessage = {
@@ -230,6 +246,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
         }
 
         case 'session.idle': {
+          setIsWaiting(false);
           setMessages((prev) =>
             prev.map((m) =>
               m.type === 'assistant' && m.isStreaming
@@ -262,9 +279,19 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center gap-3 text-[var(--text-secondary)]">
-        <span className="text-6xl">🎰</span>
-        <p className="text-lg">Pull the lever to start!</p>
+      <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center gap-4 text-[var(--text-secondary)]">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="flex flex-col items-center gap-3"
+        >
+          <img src="./logo-128.png" alt="GitHub Tokens" className="w-16 h-16 opacity-60" />
+          <p className="text-lg font-medium text-[var(--text-primary)]">What would you like to build?</p>
+          <p className="text-sm max-w-md text-center leading-relaxed">
+            Describe a task, paste an error, or ask a question — your agent will get to work.
+          </p>
+        </motion.div>
       </div>
     );
   }
@@ -325,6 +352,31 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
             </motion.div>
           );
         })}
+
+        {/* Thinking indicator — shown after user sends, before agent responds */}
+        {isWaiting && (
+          <motion.div
+            key="thinking"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="flex items-center gap-3 px-4 py-3"
+          >
+            <div className="flex gap-1">
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: 'var(--accent-purple)' }}
+                  animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.1, 0.8] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+                />
+              ))}
+            </div>
+            <span className="text-sm text-[var(--text-secondary)] italic">Thinking…</span>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );
