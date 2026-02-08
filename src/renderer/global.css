@@ -99,6 +99,37 @@ body {
   animation: logo-bounce 1.4s ease-in-out infinite;
 }
 
+/* Markdown in message tiles */
+.message-markdown {
+  line-height: 1.7;
+  word-break: break-word;
+}
+.message-markdown p { margin: 0.4em 0; }
+.message-markdown h1, .message-markdown h2, .message-markdown h3 {
+  font-weight: 700;
+  margin: 0.6em 0 0.3em;
+  color: var(--text-primary);
+}
+.message-markdown h1 { font-size: 1.3em; }
+.message-markdown h2 { font-size: 1.15em; }
+.message-markdown h3 { font-size: 1.05em; }
+.message-markdown ul, .message-markdown ol { padding-left: 1.5em; margin: 0.3em 0; }
+.message-markdown li { margin: 0.15em 0; }
+.message-markdown a { color: var(--accent-blue); text-decoration: underline; }
+.message-markdown blockquote {
+  border-left: 3px solid var(--border-color);
+  padding-left: 0.8em;
+  margin: 0.4em 0;
+  color: var(--text-secondary);
+}
+.message-markdown hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 0.6em 0;
+}
+.message-markdown strong { font-weight: 700; }
+.message-markdown em { font-style: italic; }
+
 /* YOLO mode activation flash */
 .yolo-flash {
   animation: yolo-bg 1.2s ease-out forwards;

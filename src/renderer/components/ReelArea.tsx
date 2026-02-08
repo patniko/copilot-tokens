@@ -76,6 +76,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
   const [isWaiting, setIsWaiting] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [streamSnippet, setStreamSnippet] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastPromptRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -111,6 +112,12 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
       switch (event.type) {
         case 'assistant.message_delta': {
           setIsWaiting(false);
+          // Feed the streaming snippet for the activity bar
+          setStreamSnippet((prev) => {
+            const next = prev + event.delta;
+            // Keep only the last ~120 chars for the preview
+            return next.length > 120 ? next.slice(-120) : next;
+          });
           setMessages((prev) => {
             const currentId = currentAssistantIdRef.current;
             if (currentId) {
@@ -136,6 +143,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
 
         case 'assistant.message': {
           // Final message — just mark streaming done, content already accumulated from deltas
+          setStreamSnippet('');
           setMessages((prev) => {
             const currentId = currentAssistantIdRef.current;
             if (currentId) {
@@ -163,6 +171,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
 
         case 'tool.start': {
           setIsWaiting(false);
+          setStreamSnippet('');
           partyBus.emit(PartyEvents.TOOL_START, event.toolName, event.toolCallId);
           // report_intent: update the intent badge instead of creating a tile
           if (event.toolName === 'report_intent') {
@@ -224,7 +233,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
               if (event.error) updated.error = event.error;
               if (event.result) {
                 if (m.toolType === 'bash' && !m.data.output) updated.output = event.result;
-                else if (m.toolType === 'file_edit') updated.diff = event.result;
+                else if (m.toolType === 'file_edit') updated.result = event.result;
                 else if (m.toolType === 'file_read') updated.content = event.result;
                 else updated.result = event.result;
               }
@@ -273,6 +282,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
         case 'session.idle': {
           setIsWaiting(false);
           setIsGenerating(false);
+          setStreamSnippet('');
           partyBus.emit(PartyEvents.SESSION_IDLE);
           setMessages((prev) =>
             prev.map((m) =>
@@ -378,9 +388,10 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
                 )}
                 {msg.type === 'tool_call' && !getTileRenderer(msg.data._toolName as string) && msg.toolType === 'file_edit' && (
                   <FileEditTile
-                    path={String(msg.data.path ?? msg.title)}
+                    path={String(msg.data.path ?? msg.data.fileName ?? msg.title)}
                     diff={msg.data.diff ? String(msg.data.diff) : undefined}
                     isRunning={!msg.data.completed}
+                    data={msg.data}
                   />
                 )}
                 {msg.type === 'tool_call' && !getTileRenderer(msg.data._toolName as string) && msg.toolType === 'file_read' && (
@@ -464,11 +475,15 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
               />
             </div>
 
-            {/* Intent or status */}
+            {/* Intent or status + streaming preview */}
             <div className="flex-1 min-w-0">
               {intent ? (
                 <span className="text-xs font-medium text-[var(--accent-purple)] truncate block">
                   {intent}
+                </span>
+              ) : streamSnippet ? (
+                <span className="text-xs text-[var(--text-secondary)] truncate block opacity-70">
+                  {streamSnippet.trimStart()}
                 </span>
               ) : (
                 <span className="text-xs text-[var(--text-secondary)] italic">Agent is working…</span>

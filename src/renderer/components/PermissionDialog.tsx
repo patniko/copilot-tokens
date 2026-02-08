@@ -149,8 +149,9 @@ export default function PermissionDialog({ request, onRespond }: PermissionDialo
                 onClick={handleAlways}
                 className="px-3 py-1.5 text-xs font-bold rounded-md text-black cursor-pointer"
                 style={{ background: meta.color }}
+                title={`Always allow ${request.kind} operations under the project working directory`}
               >
-                Always Allow
+                Always in Project
               </button>
             </div>
           </motion.div>

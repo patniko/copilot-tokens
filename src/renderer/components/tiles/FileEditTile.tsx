@@ -5,6 +5,7 @@ interface FileEditTileProps {
   path: string;
   diff?: string;
   isRunning?: boolean;
+  data?: Record<string, unknown>;
 }
 
 function friendlyPath(p: string): { name: string; dir: string } {
@@ -19,14 +20,43 @@ function parseDiffStats(diff: string) {
   let added = 0;
   let removed = 0;
   for (const line of lines) {
-    if (line.startsWith('+')) added++;
-    else if (line.startsWith('-')) removed++;
+    if (line.startsWith('+') && !line.startsWith('+++')) added++;
+    else if (line.startsWith('-') && !line.startsWith('---')) removed++;
   }
   return { added, removed, lines };
 }
 
-export default function FileEditTile({ path, diff, isRunning }: FileEditTileProps) {
-  const parsed = diff ? parseDiffStats(diff) : null;
+/** Build a simple diff from old_str/new_str edit args, or parse an existing diff string */
+function extractDiff(data: Record<string, unknown>): { added: number; removed: number; lines: string[] } | null {
+  // If there's a real unified diff from the SDK
+  if (typeof data.diff === 'string' && data.diff.includes('@@')) {
+    return parseDiffStats(data.diff);
+  }
+  // Synthesize from old_str / new_str (edit tool args)
+  const oldStr = data.old_str as string | undefined;
+  const newStr = data.new_str as string | undefined;
+  if (oldStr != null || newStr != null) {
+    const removedLines = oldStr ? oldStr.split('\n').map((l: string) => `-${l}`) : [];
+    const addedLines = newStr ? newStr.split('\n').map((l: string) => `+${l}`) : [];
+    const all = [...removedLines, ...addedLines];
+    return { added: addedLines.length, removed: removedLines.length, lines: all };
+  }
+  // For create/write — count the file_text lines
+  const fileText = data.file_text as string | undefined;
+  if (fileText) {
+    const lines = fileText.split('\n').map((l: string) => `+${l}`);
+    return { added: lines.length, removed: 0, lines };
+  }
+  // Result from tool.complete as a last resort (plain text message, not a diff)
+  if (typeof data.diff === 'string' && data.diff.length > 0) {
+    return parseDiffStats(data.diff);
+  }
+  return null;
+}
+
+export default function FileEditTile({ path, diff: _diff, isRunning, data }: FileEditTileProps) {
+  const parsed = extractDiff(data ?? {});
+  const resultMsg = data?.result as string | undefined;
   const isLong = parsed ? parsed.lines.length > 10 : false;
   const [expanded, setExpanded] = useState(false);
   const visibleLines = parsed
@@ -42,7 +72,7 @@ export default function FileEditTile({ path, diff, isRunning }: FileEditTileProp
       style={{ borderLeft: '4px solid var(--accent-blue)' }}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 mb-3 min-w-0" title={path}>
+      <div className="flex items-center gap-2 mb-2 min-w-0" title={path}>
         {isRunning ? (
           <motion.span
             animate={{ rotate: 360 }}
@@ -52,14 +82,7 @@ export default function FileEditTile({ path, diff, isRunning }: FileEditTileProp
             📄
           </motion.span>
         ) : (
-          <motion.span
-            initial={{ rotate: 0 }}
-            animate={{ rotate: 360 }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
-            style={{ display: 'inline-block' }}
-          >
-            📄
-          </motion.span>
+          <span style={{ color: 'var(--accent-green)' }}>✓</span>
         )}
         <span className="text-sm font-mono truncate" style={{ color: 'var(--text-primary)' }}>
           {name}

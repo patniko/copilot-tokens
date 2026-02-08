@@ -31,7 +31,7 @@ function isUnder(filePath: string, prefix: string): boolean {
  * Extract a path from a permission request based on its kind.
  */
 function extractPath(request: Record<string, unknown>): string | null {
-  const raw = request.path ?? request.file ?? request.filePath ?? null;
+  const raw = request.fileName ?? request.path ?? request.file ?? request.filePath ?? null;
   return raw ? String(raw) : null;
 }
 

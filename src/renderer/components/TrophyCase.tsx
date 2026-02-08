@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MILESTONES, getAllMilestones, type Milestone } from '../lib/milestones';
-import type { Achievement } from '../../main/stats-service';
+import { getLevelTier, MAX_LEVEL } from '../lib/level-system';
+import type { Achievement, LevelProgressData } from '../../main/stats-service';
 
 interface TrophyCaseProps {
   isOpen: boolean;
@@ -19,11 +20,13 @@ const formatDate = (ts: number) =>
 
 export default function TrophyCase({ isOpen, onClose }: TrophyCaseProps) {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [currentLevel, setCurrentLevel] = useState(1);
   const unlockedIds = new Set(achievements.map((a) => a.milestoneId));
 
   useEffect(() => {
     if (!isOpen) return;
     window.statsAPI?.getAchievements().then(setAchievements);
+    window.statsAPI?.getLevelProgress().then((lp) => setCurrentLevel(lp.level));
   }, [isOpen]);
 
   const allMilestones = getAllMilestones();
@@ -88,6 +91,60 @@ export default function TrophyCase({ isOpen, onClose }: TrophyCaseProps) {
                   transition={{ duration: 0.8, ease: 'easeOut' }}
                 />
               </div>
+
+              {/* Tier progression */}
+              <section>
+                <h3 className="text-xs uppercase tracking-wider text-[var(--text-secondary)] mb-2">
+                  Tier Progression
+                </h3>
+                <div className="flex flex-col gap-1.5">
+                  {([
+                    { name: 'Novice',    emoji: '🌱', minLevel: 1,  maxLevel: 14 },
+                    { name: 'Adept',     emoji: '⭐', minLevel: 15, maxLevel: 29 },
+                    { name: 'Skilled',   emoji: '🔥', minLevel: 30, maxLevel: 44 },
+                    { name: 'Veteran',   emoji: '⚔️', minLevel: 45, maxLevel: 59 },
+                    { name: 'Expert',    emoji: '💎', minLevel: 60, maxLevel: 74 },
+                    { name: 'Master',    emoji: '👑', minLevel: 75, maxLevel: 89 },
+                    { name: 'Legendary', emoji: '🌟', minLevel: 90, maxLevel: 100 },
+                  ] as const).map((tier) => {
+                    const reached = currentLevel >= tier.minLevel;
+                    const current = currentLevel >= tier.minLevel && currentLevel <= tier.maxLevel;
+                    return (
+                      <div
+                        key={tier.name}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                          current
+                            ? 'bg-[var(--accent-purple)]/15 border border-[var(--accent-purple)]/30'
+                            : reached
+                            ? 'bg-[var(--bg-primary)]'
+                            : 'bg-[var(--bg-primary)] opacity-40'
+                        }`}
+                      >
+                        <span className={`text-xl ${reached ? '' : 'grayscale blur-[1px]'}`}>{tier.emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-xs font-bold ${current ? 'text-[var(--accent-gold)]' : reached ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                            {tier.name}
+                          </div>
+                          <div className="text-[10px] text-[var(--text-secondary)]">
+                            Levels {tier.minLevel}–{tier.maxLevel}
+                          </div>
+                        </div>
+                        {current && (
+                          <span className="text-[10px] font-bold text-[var(--accent-purple)] uppercase tracking-wider">
+                            Current
+                          </span>
+                        )}
+                        {reached && !current && (
+                          <span className="text-[10px] text-[var(--accent-gold)]">✓</span>
+                        )}
+                        {!reached && (
+                          <span className="text-[10px] text-[var(--text-secondary)]">🔒</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
 
               {/* Badge grid */}
               <div className="grid grid-cols-3 gap-3">

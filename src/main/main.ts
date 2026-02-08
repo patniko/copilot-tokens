@@ -6,6 +6,12 @@ import { CopilotService } from './copilot-service';
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
+// Ensure only one instance of the app runs
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+}
+
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
@@ -32,7 +38,14 @@ function createWindow(): void {
   }
 }
 
-app.on('ready', createWindow);
+app.whenReady().then(createWindow);
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
 
 app.on('window-all-closed', () => {
   CopilotService.getInstance().stop().catch(console.error);
