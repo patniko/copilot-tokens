@@ -5,6 +5,7 @@ import ContextProgressBar from './ContextProgressBar';
 export interface DashboardStats {
   inputTokens: number;
   outputTokens: number;
+  realOutputTokens: number;
   filesChanged: number;
   linesAdded: number;
   linesRemoved: number;
@@ -21,6 +22,7 @@ interface TokenDashboardProps {
 const initialStats: DashboardStats = {
   inputTokens: 0,
   outputTokens: 0,
+  realOutputTokens: 0,
   filesChanged: 0,
   linesAdded: 0,
   linesRemoved: 0,
@@ -75,6 +77,7 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
 
       if (type === 'assistant.message_delta') {
         const delta = (ev.delta ?? ev.content ?? '') as string;
+        // Rough estimate until real usage event arrives
         next.outputTokens += Math.max(1, Math.ceil(delta.length / 4));
       }
 
@@ -85,8 +88,14 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
       if (type === 'assistant.usage') {
         const input = (ev.inputTokens ?? 0) as number;
         const output = (ev.outputTokens ?? 0) as number;
-        next.inputTokens += input;
-        if (output > 0) next.outputTokens = output;
+        // Input tokens = current context size (use latest, not cumulative)
+        if (input > 0) next.inputTokens = input;
+        // Output tokens = accumulate real counts, replace the delta estimate
+        if (output > 0) {
+          // Subtract the delta-based estimate we added during streaming, add the real count
+          next.outputTokens = prev.realOutputTokens + output;
+          next.realOutputTokens = prev.realOutputTokens + output;
+        }
       }
 
       if (type === 'tool.start') {
@@ -130,7 +139,7 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
 
       {/* Context Usage */}
       <Section title="Context Window">
-        <ContextProgressBar usedTokens={totalTokens} maxTokens={contextWindow} />
+        <ContextProgressBar usedTokens={stats.inputTokens} maxTokens={contextWindow} />
       </Section>
 
       {/* File Stats */}

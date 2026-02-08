@@ -1,7 +1,12 @@
+import { readFileSync, readdirSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+
 // Dynamic import to load ESM SDK in Electron's CJS main process
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 type CopilotClientType = import('@github/copilot-sdk').CopilotClient;
 type CopilotSessionType = import('@github/copilot-sdk').CopilotSession;
+type MCPServerConfig = import('@github/copilot-sdk').MCPServerConfig;
 
 // CopilotEvent union type (renderer-facing)
 export type CopilotEvent =
@@ -22,6 +27,42 @@ export type EventCallback = (event: CopilotEvent) => void;
 
 async function loadSDK(): Promise<typeof import('@github/copilot-sdk')> {
   return import('@github/copilot-sdk');
+}
+
+/** Load MCP server configs from ~/.copilot/mcp-config.json and installed plugins */
+function loadMCPServers(): Record<string, MCPServerConfig> {
+  const servers: Record<string, MCPServerConfig> = {};
+  const copilotDir = join(homedir(), '.copilot');
+
+  // 1. ~/.copilot/mcp-config.json
+  const mcpConfigPath = join(copilotDir, 'mcp-config.json');
+  if (existsSync(mcpConfigPath)) {
+    try {
+      const cfg = JSON.parse(readFileSync(mcpConfigPath, 'utf-8'));
+      if (cfg.mcpServers) Object.assign(servers, cfg.mcpServers);
+    } catch { /* skip malformed config */ }
+  }
+
+  // 2. Installed plugins (~/.copilot/installed-plugins/*/*/.mcp.json)
+  const pluginsDir = join(copilotDir, 'installed-plugins');
+  if (existsSync(pluginsDir)) {
+    try {
+      for (const ns of readdirSync(pluginsDir)) {
+        const nsDir = join(pluginsDir, ns);
+        for (const plugin of readdirSync(nsDir)) {
+          const mcpPath = join(nsDir, plugin, '.mcp.json');
+          if (existsSync(mcpPath)) {
+            try {
+              const cfg = JSON.parse(readFileSync(mcpPath, 'utf-8'));
+              if (cfg.mcpServers) Object.assign(servers, cfg.mcpServers);
+            } catch { /* skip */ }
+          }
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  return servers;
 }
 
 export class CopilotService {
@@ -99,6 +140,7 @@ export class CopilotService {
       const opts: Record<string, unknown> = {
         model: this.model,
         streaming: true,
+        mcpServers: loadMCPServers(),
       };
       if (this.workingDirectory) {
         opts.workingDirectory = this.workingDirectory;

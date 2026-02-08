@@ -6,6 +6,7 @@ import type { DashboardStats } from '../components/TokenDashboard';
 const EMPTY_STATS: DashboardStats = {
   inputTokens: 0,
   outputTokens: 0,
+  realOutputTokens: 0,
   filesChanged: 0,
   linesAdded: 0,
   linesRemoved: 0,
