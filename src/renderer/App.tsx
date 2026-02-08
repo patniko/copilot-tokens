@@ -105,12 +105,17 @@ export default function App() {
     if (dir) refreshGitInfo(dir);
   }, [refreshGitInfo]);
 
+  // Persistent "super" border when above 500K tokens
+  const [superMode, setSuperMode] = useState(false);
+
   const handleStatsUpdate = useCallback(
     (stats: DashboardStats) => {
       latestStatsRef.current = stats;
       checkStats(stats);
+      const total = stats.inputTokens + stats.outputTokens;
+      if (total >= 500_000 && !superMode) setSuperMode(true);
     },
-    [checkStats],
+    [checkStats, superMode],
   );
 
   const handleUsage = useCallback((input: number, _output: number) => {
@@ -172,7 +177,7 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <div className="flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono">
+      <div className={`flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono${superMode ? ' super-border' : ''}`}>
         {/* Title Bar */}
         <header className="flex items-center justify-center py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative">
           <div className="flex items-center gap-2">

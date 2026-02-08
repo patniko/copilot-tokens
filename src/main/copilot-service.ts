@@ -140,6 +140,7 @@ export class CopilotService {
       const opts: Record<string, unknown> = {
         model: this.model,
         streaming: true,
+        excludedTools: [],
         mcpServers: loadMCPServers(),
       };
       if (this.workingDirectory) {

@@ -40,30 +40,37 @@ export default function MilestoneOverlay({ milestone, onComplete }: MilestoneOve
     <AnimatePresence>
       {milestone && (
         <div className="fixed inset-0 pointer-events-none z-50">
-          {/* Border pulse for jackpot/mega */}
+          {/* Border flicker for jackpot/mega — flickers briefly then fades out */}
           {(milestone.effect === 'jackpot' || milestone.effect === 'mega') && (
             <motion.div
               className="absolute inset-0 border-4 rounded-lg"
               initial={{ borderColor: 'rgba(255,215,0,0)', opacity: 0 }}
               animate={{
-                borderColor: ['rgba(255,215,0,0.8)', 'rgba(255,60,60,0.8)', 'rgba(255,215,0,0.8)'],
-                opacity: 1,
+                borderColor: [
+                  'rgba(255,215,0,0.9)', 'rgba(255,60,60,0.8)',
+                  'rgba(255,215,0,0.9)', 'rgba(255,60,60,0.8)',
+                  'rgba(255,215,0,0.9)', 'rgba(255,60,60,0.8)',
+                  'rgba(255,215,0,0.6)',
+                ],
+                opacity: [0, 1, 1, 1, 1, 1, 0],
               }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.6, repeat: Infinity }}
+              transition={{ duration: 2.4, ease: 'easeOut' }}
             />
           )}
 
-          {/* Background brightness pulse for jackpot/mega */}
+          {/* Background brightness pulse for jackpot/mega — brief flash */}
           {(milestone.effect === 'jackpot' || milestone.effect === 'mega') && (
             <motion.div
               className="absolute inset-0"
               initial={{ backgroundColor: 'rgba(255,255,255,0)' }}
               animate={{
-                backgroundColor: ['rgba(255,255,255,0)', 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0)'],
+                backgroundColor: [
+                  'rgba(255,255,255,0)', 'rgba(255,255,255,0.06)',
+                  'rgba(255,255,255,0)', 'rgba(255,255,255,0.04)',
+                  'rgba(255,255,255,0)',
+                ],
               }}
-              exit={{ backgroundColor: 'rgba(255,255,255,0)' }}
-              transition={{ duration: 0.8, repeat: Infinity }}
+              transition={{ duration: 2, ease: 'easeOut' }}
             />
           )}
 
