@@ -18,6 +18,7 @@ interface TokenDashboardProps {
   inputTokenCount?: number;
   contextWindow?: number;
   onStatsUpdate?: (stats: DashboardStats) => void;
+  panelIds?: string[];
 }
 
 const initialStats: DashboardStats = {
@@ -31,9 +32,9 @@ const initialStats: DashboardStats = {
   toolCalls: 0,
 };
 
-export default function TokenDashboard({ inputTokenCount, contextWindow, onStatsUpdate }: TokenDashboardProps) {
+export default function TokenDashboard({ inputTokenCount, contextWindow, onStatsUpdate, panelIds }: TokenDashboardProps) {
   const [stats, setStats] = useState<DashboardStats>(initialStats);
-  const [gitStats, setGitStats] = useState({ filesChanged: 0, linesAdded: 0, linesRemoved: 0 });
+  const [gitStats, setGitStats] = useState<{ filesChanged: number; linesAdded: number; linesRemoved: number } | null>(null);
   const statsRef = useRef(stats);
 
   // Keep ref in sync for event callbacks
@@ -44,6 +45,8 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
   // Report stats upstream (merge token stats + git stats)
   const prevTotalRef = useRef(0);
   useEffect(() => {
+    // Wait for initial git stats poll before reporting, so milestones get a correct baseline
+    if (!gitStats) return;
     const merged = { ...stats, filesChanged: gitStats.filesChanged, linesAdded: gitStats.linesAdded, linesRemoved: gitStats.linesRemoved };
     onStatsUpdate?.(merged);
     // Emit Party Bus events when crossing token thresholds
@@ -129,13 +132,13 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
     });
   }, []);
 
-  // Subscribe to copilot events (both panels)
+  // Subscribe to copilot events (all panels)
   useEffect(() => {
     if (!window.copilotAPI?.onEvent) return;
-    const unsub1 = window.copilotAPI.onEvent(handleEvent, 'main');
-    const unsub2 = window.copilotAPI.onEvent(handleEvent, 'split');
-    return () => { unsub1(); unsub2(); };
-  }, [handleEvent]);
+    const ids = panelIds && panelIds.length > 0 ? panelIds : ['main'];
+    const unsubs = ids.map(id => window.copilotAPI.onEvent(handleEvent, id));
+    return () => unsubs.forEach(u => u());
+  }, [handleEvent, panelIds?.join(',')]);
 
   const totalTokens = stats.inputTokens + stats.outputTokens;
 
@@ -156,9 +159,9 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
       {/* File Stats */}
       <Section title="Changes">
         <div className="flex gap-4 items-end">
-          <OdometerCounter label="FILES" value={gitStats.filesChanged} size="sm" />
-          <OdometerCounter label="+" value={gitStats.linesAdded} size="sm" color="var(--accent-green)" />
-          <OdometerCounter label="−" value={gitStats.linesRemoved} size="sm" color="var(--accent-red)" />
+          <OdometerCounter label="FILES" value={gitStats?.filesChanged ?? 0} size="sm" />
+          <OdometerCounter label="+" value={gitStats?.linesAdded ?? 0} size="sm" color="var(--accent-green)" />
+          <OdometerCounter label="−" value={gitStats?.linesRemoved ?? 0} size="sm" color="var(--accent-red)" />
         </div>
       </Section>
 

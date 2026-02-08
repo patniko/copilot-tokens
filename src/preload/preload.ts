@@ -98,6 +98,9 @@ contextBridge.exposeInMainWorld('statsAPI', {
   setLevelProgress(progress: { level: number; categoryProgress: { tokens: number; messages: number; toolCalls: number; files: number; lines: number } }): Promise<void> {
     return ipcRenderer.invoke('stats:setLevelProgress', progress);
   },
+  recordReactionTime(timeMs: number): Promise<{ isNewBest: boolean; timeMs: number; previousBest: number }> {
+    return ipcRenderer.invoke('stats:recordReactionTime', timeMs);
+  },
 });
 
 contextBridge.exposeInMainWorld('gitAPI', {

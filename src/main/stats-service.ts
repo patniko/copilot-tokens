@@ -141,11 +141,6 @@ export class StatsService {
       }
       store.set('lastSessionDate', today);
     }
-
-    // Update fastest response
-    if (stats.durationMs < store.get('fastestResponse')) {
-      store.set('fastestResponse', stats.durationMs);
-    }
   }
 
   getAllTimeBests(): Partial<Record<keyof SessionStats, number>> {
@@ -195,6 +190,16 @@ export class StatsService {
 
   getRecentCwds(): string[] {
     return store.get('recentCwds');
+  }
+
+  /** Record a permission reaction time. Returns { isNewBest, timeMs, previousBest }. */
+  recordReactionTime(timeMs: number): { isNewBest: boolean; timeMs: number; previousBest: number } {
+    const prev = store.get('fastestResponse');
+    const isNewBest = timeMs < prev;
+    if (isNewBest) {
+      store.set('fastestResponse', timeMs);
+    }
+    return { isNewBest, timeMs, previousBest: prev };
   }
 
   getModel(): string {

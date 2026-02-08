@@ -14,6 +14,9 @@ interface PromptBarProps {
   onGeneratingChange?: (generating: boolean) => void;
   cwd?: string;
   onBrowseCwd?: () => void;
+  onNewSession?: () => void;
+  onLoadSession?: () => void;
+  onSplitSession?: () => void;
 }
 
 const LINE_HEIGHT = 24;
@@ -25,10 +28,11 @@ function isImageFile(name: string): boolean {
   return IMAGE_EXTENSIONS.has(ext);
 }
 
-export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, onBrowseCwd }: PromptBarProps) {
+export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, onBrowseCwd, onNewSession, onLoadSession, onSplitSession }: PromptBarProps) {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [sendMenuOpen, setSendMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { play } = useSound();
@@ -155,7 +159,6 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
     }
   }, [addFiles]);
 
-  const canSend = prompt.trim().length > 0 || attachments.length > 0;
 
   return (
     <div
@@ -251,32 +254,59 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
               ⏹ STOP
             </motion.button>
           ) : (
-            <motion.button
-              key="send"
+            <motion.div
+              key="send-group"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.15 }}
-              onClick={handleSend}
-              disabled={!canSend}
-              whileHover={
-                canSend
-                  ? {
-                      boxShadow: [
-                        '0 0 4px var(--accent-gold)',
-                        '0 0 16px var(--accent-gold)',
-                        '0 0 4px var(--accent-gold)',
-                      ],
-                      transition: { duration: 1.2, repeat: Infinity },
-                    }
-                  : undefined
-              }
-              whileTap={canSend ? { y: 4 } : undefined}
-              className="px-3 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center"
-              style={{ willChange: 'transform' }}
+              className="relative flex items-stretch"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            </motion.button>
+              <button
+                onClick={handleSend}
+                className="px-3 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-l-lg cursor-pointer flex items-center justify-center"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+              <div className="w-px bg-black/20" />
+              <button
+                onClick={() => setSendMenuOpen(!sendMenuOpen)}
+                className="px-1.5 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-r-lg cursor-pointer flex items-center justify-center hover:bg-[var(--accent-gold)]/80 transition-colors"
+              >
+                <svg width="10" height="10" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${sendMenuOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
+              </button>
+
+              {sendMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setSendMenuOpen(false)} />
+                  <div className="absolute bottom-full right-0 mb-2 z-50 w-44 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl overflow-hidden">
+                    <button
+                      onClick={() => { setSendMenuOpen(false); onNewSession?.(); }}
+                      className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <span className="text-[var(--text-secondary)]">+</span> New Session
+                    </button>
+                    <button
+                      onClick={() => { setSendMenuOpen(false); onLoadSession?.(); }}
+                      className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="text-[var(--text-secondary)]"><path d="M1.5 1.5v13h13v-13h-13zM0 1a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H1a1 1 0 01-1-1V1zm4.5 2.5h7v1h-7v-1zm0 3h7v1h-7v-1zm0 3h4v1h-4v-1z"/></svg>
+                      Load Session
+                    </button>
+                    <button
+                      onClick={() => { setSendMenuOpen(false); onSplitSession?.(); }}
+                      className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-[var(--text-secondary)]">
+                        <rect x="1" y="2" width="14" height="12" rx="1" />
+                        <line x1="8" y1="2" x2="8" y2="14" />
+                      </svg>
+                      Split Session
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
           )}
         </AnimatePresence>
       </div>

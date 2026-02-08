@@ -29,9 +29,7 @@ export default function App() {
   const [trophyCaseOpen, setTrophyCaseOpen] = useState(false);
   const [replaySessionTimestamp, setReplaySessionTimestamp] = useState<number | null>(null);
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
-  const [sessionMenuOpen, setSessionMenuOpen] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState<number | null>(null);
-  const [userPrompt, setUserPrompt] = useState<string | null>(null);
   const [changedFiles, setChangedFiles] = useState<string[]>([]);
   const [inputTokens, setInputTokens] = useState(0);
   const [cwd, setCwd] = useState('');
@@ -59,34 +57,50 @@ export default function App() {
   // Reset key — incrementing remounts ReelArea + TokenDashboard
   const [resetKey, setResetKey] = useState(0);
 
-  // Split panel state
-  const [isSplit, setIsSplit] = useState(false);
-  const [userPromptRight, setUserPromptRight] = useState<string | null>(null);
-  const [resetKeyRight, setResetKeyRight] = useState(0);
+  // Dynamic panels state: each panel has its own id, prompt, and resetKey
+  const [panels, setPanels] = useState<{ id: string; userPrompt: string | null; resetKey: number }[]>([
+    { id: 'main', userPrompt: null, resetKey: 0 },
+  ]);
+  const panelCounter = useRef(0);
 
   const handleReset = useCallback(() => {
     setInputTokens(0);
     setChangedFiles([]);
-    setUserPrompt(null);
     latestStatsRef.current = null;
     sessionStartRef.current = null;
     sessionRecorder.reset();
     setResetKey((k) => k + 1);
+    // Reset all panels to just the main one
+    setPanels([{ id: 'main', userPrompt: null, resetKey: Date.now() }]);
   }, [sessionRecorder]);
 
-  // Permission request state
+  // Permission request state + reaction time tracking
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestData | null>(null);
+  const permissionShownAt = useRef<number | null>(null);
+  const [reactionBest, setReactionBest] = useState<{ timeMs: number; previousBest: number } | null>(null);
 
   useEffect(() => {
     if (!window.copilotAPI?.onPermissionRequest) return;
     return window.copilotAPI.onPermissionRequest((request) => {
+      permissionShownAt.current = Date.now();
       setPermissionRequest(request as PermissionRequestData);
     });
   }, []);
 
   const handlePermissionRespond = useCallback((decision: PermissionDecision) => {
+    // Measure reaction time
+    if (permissionShownAt.current) {
+      const reactionMs = Date.now() - permissionShownAt.current;
+      permissionShownAt.current = null;
+      window.statsAPI?.recordReactionTime(reactionMs).then((result) => {
+        if (result.isNewBest) {
+          setReactionBest({ timeMs: result.timeMs, previousBest: result.previousBest });
+          SoundManager.getInstance().play('milestone');
+          setTimeout(() => setReactionBest(null), 4000);
+        }
+      });
+    }
     if (decision === 'always' && permissionRequest) {
-      // Persist an "always allow" rule for this kind under the CWD
       const pathPrefix = permissionRequest.cwd || cwd;
       if (pathPrefix) {
         window.copilotAPI?.addPermissionRule(permissionRequest.kind, pathPrefix);
@@ -200,7 +214,7 @@ export default function App() {
     setInputTokens((prev) => prev + input);
   }, []);
 
-  // Track changed files from copilot events (listen on main panel)
+  // Track changed files from copilot events (all panels)
   useEffect(() => {
     if (!window.copilotAPI?.onEvent) return;
     const handler = (event: unknown) => {
@@ -217,36 +231,43 @@ export default function App() {
         }
       }
     };
-    const unsub1 = window.copilotAPI.onEvent(handler, 'main');
-    const unsub2 = window.copilotAPI.onEvent(handler, 'split');
-    return () => { unsub1(); unsub2(); };
-  }, []);
+    const unsubs = panels.map(p => window.copilotAPI.onEvent(handler, p.id));
+    return () => unsubs.forEach(u => u());
+  }, [panels.map(p => p.id).join(',')]);
+
+  const handlePanelSend = useCallback((panelId: string, prompt: string) => {
+    if (!currentModel) {
+      setModelsError(modelsLoading ? 'Models are still loading, please wait…' : 'No model selected. Please select a model first.');
+      return;
+    }
+    if (!sessionStartRef.current) sessionStartRef.current = Date.now();
+    setAgentActive(true);
+    setPanels(prev => prev.map(p =>
+      p.id === panelId ? { ...p, userPrompt: prompt } : p,
+    ));
+    requestAnimationFrame(() => {
+      setPanels(prev => prev.map(p =>
+        p.id === panelId ? { ...p, userPrompt: null } : p,
+      ));
+    });
+  }, [currentModel, modelsLoading]);
 
   const handleSend = useCallback((prompt: string) => {
-    if (!currentModel) {
-      setModelsError(modelsLoading ? 'Models are still loading, please wait…' : 'No model selected. Please select a model first.');
-      return;
-    }
-    if (!sessionStartRef.current) sessionStartRef.current = Date.now();
-    setAgentActive(true);
-    setUserPrompt(prompt);
-    requestAnimationFrame(() => setUserPrompt(null));
-  }, [currentModel, modelsLoading]);
+    handlePanelSend('main', prompt);
+  }, [handlePanelSend]);
 
-  const handleSendRight = useCallback((prompt: string) => {
-    if (!currentModel) {
-      setModelsError(modelsLoading ? 'Models are still loading, please wait…' : 'No model selected. Please select a model first.');
-      return;
-    }
-    if (!sessionStartRef.current) sessionStartRef.current = Date.now();
-    setAgentActive(true);
-    setUserPromptRight(prompt);
-    requestAnimationFrame(() => setUserPromptRight(null));
-  }, [currentModel, modelsLoading]);
+  const handleAddPanel = useCallback(() => {
+    panelCounter.current += 1;
+    const newId = `split-${panelCounter.current}`;
+    setPanels(prev => [...prev, { id: newId, userPrompt: null, resetKey: 0 }]);
+  }, []);
 
-  const handleCloseSplit = useCallback(() => {
-    setIsSplit(false);
-    window.copilotAPI?.destroySession('split');
+  const handleClosePanel = useCallback((panelId: string) => {
+    setPanels(prev => {
+      if (prev.length <= 1) return prev;
+      return prev.filter(p => p.id !== panelId);
+    });
+    window.copilotAPI?.destroySession(panelId);
   }, []);
 
   // Record session to leaderboard when agent goes idle
@@ -304,10 +325,9 @@ export default function App() {
         });
       }
     };
-    const unsub1 = window.copilotAPI.onEvent(handler, 'main');
-    const unsub2 = window.copilotAPI.onEvent(handler, 'split');
-    return () => { unsub1(); unsub2(); };
-  }, []);
+    const unsubs = panels.map(p => window.copilotAPI.onEvent(handler, p.id));
+    return () => unsubs.forEach(u => u());
+  }, [panels.map(p => p.id).join(',')]);
 
   return (
     <ThemeProvider>
@@ -330,45 +350,6 @@ export default function App() {
           </div>
           <div className="absolute right-4 flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} />
-            <button
-              onClick={() => setIsSplit((s) => !s)}
-              className={`text-sm text-[var(--text-secondary)] hover:text-[var(--accent-purple)] hover:scale-110 transition-all cursor-pointer px-2.5 py-2.5 rounded border border-[var(--border-color)] bg-[var(--bg-primary)] ${isSplit ? 'text-[var(--accent-purple)] bg-[var(--accent-purple)]/10' : ''}`}
-              title={isSplit ? 'Close split' : 'Split panel'}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <rect x="1" y="2" width="14" height="12" rx="1" />
-                <line x1="8" y1="2" x2="8" y2="14" />
-              </svg>
-            </button>
-            <div className="relative flex items-center">
-              <button
-                onClick={handleReset}
-                className="text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--accent-gold)] hover:scale-110 transition-all cursor-pointer px-3 py-2.5 rounded-l border border-[var(--border-color)] border-r-0 bg-[var(--bg-primary)]"
-                title="New Chat"
-              >
-                +
-              </button>
-              <button
-                onClick={() => setSessionMenuOpen(!sessionMenuOpen)}
-                className="text-[var(--text-secondary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer px-2.5 py-2.5 rounded-r border border-[var(--border-color)] bg-[var(--bg-primary)] flex items-center"
-                title="Session options"
-              >
-                <svg width="12" height="12" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${sessionMenuOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
-              </button>
-              {sessionMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setSessionMenuOpen(false)} />
-                  <div className="absolute top-full right-0 mt-1 z-50 w-40 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl overflow-hidden">
-                    <button
-                      onClick={() => { setSessionMenuOpen(false); setSessionBrowserOpen(true); }}
-                      className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer"
-                    >
-                      View Sessions
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
           </div>
         </header>
 
@@ -545,7 +526,7 @@ export default function App() {
           <aside className="w-64 shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 flex flex-col gap-2 overflow-hidden">
             <h2 className="text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">Token Dashboard</h2>
             <div className="flex-1 min-h-0">
-              <TokenDashboard key={resetKey} inputTokenCount={inputTokens} contextWindow={availableModels.find(m => m.id === currentModel)?.contextWindow} onStatsUpdate={handleStatsUpdate} />
+              <TokenDashboard key={resetKey} inputTokenCount={inputTokens} contextWindow={availableModels.find(m => m.id === currentModel)?.contextWindow} onStatsUpdate={handleStatsUpdate} panelIds={panels.map(p => p.id)} />
             </div>
             <div className="shrink-0">
               <AvatarMenu
@@ -574,19 +555,17 @@ export default function App() {
               />
             ) : (
               <SplitLayout
-                isSplit={isSplit}
-                onCloseSplit={handleCloseSplit}
-                userPrompt={userPrompt}
+                panels={panels}
                 onUsage={handleUsage}
-                onSend={handleSend}
+                onPanelSend={handlePanelSend}
                 cwd={cwd}
                 onBrowseCwd={handleBrowseCwd}
                 permissionRequest={permissionRequest}
                 onPermissionRespond={handlePermissionRespond}
-                resetKey={resetKey}
-                userPromptRight={userPromptRight}
-                onSendRight={handleSendRight}
-                resetKeyRight={resetKeyRight}
+                onNewSession={handleReset}
+                onLoadSession={() => setSessionBrowserOpen(true)}
+                onSplitSession={handleAddPanel}
+                onClosePanel={handleClosePanel}
               />
             )}
           </section>
@@ -613,6 +592,18 @@ export default function App() {
           <div className="yolo-cool fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
             <div className="yolo-cool-text text-5xl font-black select-none">
               🐔 safe mode 🛡️
+            </div>
+          </div>
+        )}
+        {/* Reaction time personal best celebration */}
+        {reactionBest && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] animate-bounce">
+            <div className="bg-[var(--accent-gold)]/90 text-black px-6 py-3 rounded-xl shadow-2xl text-center">
+              <div className="text-2xl font-black">⚡ NEW PERSONAL BEST! ⚡</div>
+              <div className="text-lg font-bold mt-1">{reactionBest.timeMs.toLocaleString()}ms reaction time</div>
+              {reactionBest.previousBest < Infinity && (
+                <div className="text-sm opacity-80 mt-0.5">Previous: {reactionBest.previousBest.toLocaleString()}ms</div>
+              )}
             </div>
           </div>
         )}

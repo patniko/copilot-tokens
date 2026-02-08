@@ -166,6 +166,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     stats.setLevelProgress(progress);
   });
 
+  ipcMain.handle('stats:recordReactionTime', (_event, timeMs: number) => {
+    return stats.recordReactionTime(timeMs);
+  });
+
   ipcMain.handle('stats:getCommitBests', () => {
     return stats.getCommitBests();
   });

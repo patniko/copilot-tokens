@@ -33,6 +33,7 @@ interface StatsAPI {
   getCommitBests(): Promise<{ linesAdded: number; linesRemoved: number }>;
   getLevelProgress(): Promise<LevelProgressData>;
   setLevelProgress(progress: LevelProgressData): Promise<void>;
+  recordReactionTime(timeMs: number): Promise<{ isNewBest: boolean; timeMs: number; previousBest: number }>;
 }
 
 interface GitAPI {
