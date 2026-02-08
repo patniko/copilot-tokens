@@ -40,6 +40,7 @@ export default function App() {
 
   // YOLO mode state
   const [yoloMode, setYoloMode] = useState(false);
+  const [yoloFlash, setYoloFlash] = useState(false);
 
   // Agent activity state (for logo bounce)
   const [agentActive, setAgentActive] = useState(false);
@@ -401,6 +402,10 @@ export default function App() {
                 const next = !yoloMode;
                 setYoloMode(next);
                 window.copilotAPI?.setYoloMode(next);
+                if (next) {
+                  setYoloFlash(true);
+                  setTimeout(() => setYoloFlash(false), 1200);
+                }
               }}
               className={`px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-1 font-bold text-[10px] ${
                 yoloMode
@@ -411,12 +416,6 @@ export default function App() {
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 0L0 14h9l-2 10L20 10h-9l2-10z"/></svg>
               YOLO
-            </button>
-            <button
-              onClick={handleBrowseCwd}
-              className="px-2 py-0.5 rounded text-[var(--text-secondary)] hover:text-[var(--accent-gold)] hover:bg-[var(--accent-gold)]/10 transition-colors cursor-pointer text-[10px]"
-            >
-              Change
             </button>
           </div>
         </div>
@@ -449,6 +448,15 @@ export default function App() {
         <SessionReplay sessionTimestamp={replaySessionTimestamp} onClose={() => setReplaySessionTimestamp(null)} />
         <MilestoneOverlay milestone={activeMilestone} onComplete={dismissMilestone} />
         <LevelUpOverlay level={levelUpLevel} onComplete={() => setLevelUpLevel(null)} />
+
+        {/* YOLO activation flash */}
+        {yoloFlash && (
+          <div className="yolo-flash fixed inset-0 z-[200] pointer-events-none flex items-center justify-center">
+            <div className="yolo-flash-text text-6xl font-black select-none">
+              🔥 YOLO 🔥
+            </div>
+          </div>
+        )}
       </div>
     </ThemeProvider>
   );

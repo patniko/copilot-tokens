@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
 export interface PermissionRequestData {
   kind: 'shell' | 'write' | 'mcp' | 'read' | 'url';
@@ -30,7 +30,7 @@ function getIntention(request: PermissionRequestData): string | null {
 
 /** Fields to skip when building a fallback summary */
 const SKIP_FIELDS = new Set(['kind', 'toolCallId', 'cwd', 'intention', 'description', 'title',
-  'canOfferSessionApproval', 'hasWriteFileRedirection', 'commands']);
+  'canOfferSessionApproval', 'hasWriteFileRedirection', 'commands', 'fileName', 'diff', 'newFileContents']);
 
 function getDetail(request: PermissionRequestData): string {
   if (request.kind === 'shell') {
@@ -39,7 +39,7 @@ function getDetail(request: PermissionRequestData): string {
   if (request.kind === 'write' || request.kind === 'read') {
     const paths = request.possiblePaths as string[] | undefined;
     if (paths?.length) return paths.join('\n');
-    return String(request.path ?? request.file ?? request.filePath ?? request.fullCommandText ?? '');
+    return String(request.fileName ?? request.path ?? request.file ?? request.filePath ?? request.fullCommandText ?? '');
   }
   if (request.kind === 'url') {
     const urls = request.possibleUrls as string[] | undefined;
@@ -72,6 +72,7 @@ export default function PermissionDialog({ request, onRespond }: PermissionDialo
   const handleAllow = useCallback(() => onRespond('allow'), [onRespond]);
   const handleAlways = useCallback(() => onRespond('always'), [onRespond]);
   const handleDeny = useCallback(() => onRespond('deny'), [onRespond]);
+  const [showRaw, setShowRaw] = useState(false);
 
   const meta = request ? (kindMeta[request.kind] ?? { icon: '❓', label: request.kind, color: 'var(--text-secondary)' }) : null;
   const intention = request ? getIntention(request) : null;
@@ -103,17 +104,32 @@ export default function PermissionDialog({ request, onRespond }: PermissionDialo
               </div>
             </div>
 
-            {/* Detail */}
-            {detail && (
-              <div className="px-4 py-2">
+            {/* Detail or raw payload toggle */}
+            <div className="px-4 py-2">
+              {detail ? (
                 <div
                   className="font-mono text-xs px-3 py-2 rounded-md overflow-x-auto whitespace-pre-wrap break-all max-h-28 overflow-y-auto"
                   style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.06)' }}
                 >
                   {detail}
                 </div>
-              </div>
-            )}
+              ) : showRaw ? (
+                <pre
+                  className="font-mono text-xs px-3 py-2 rounded-md overflow-x-auto whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
+                  style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}
+                >
+                  {JSON.stringify(request, null, 2)}
+                </pre>
+              ) : (
+                <button
+                  onClick={() => setShowRaw(true)}
+                  className="text-xs cursor-pointer"
+                  style={{ color: 'var(--accent-blue)', background: 'none', border: 'none' }}
+                >
+                  Show details
+                </button>
+              )}
+            </div>
 
             {/* Actions */}
             <div className="px-4 py-2.5 flex items-center justify-end gap-2">
