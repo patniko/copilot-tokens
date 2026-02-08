@@ -26,6 +26,7 @@ export default function PromptBar({ onSend, onGeneratingChange }: PromptBarProps
 
   // Listen for session.idle to stop generating
   useEffect(() => {
+    if (!window.copilotAPI?.onEvent) return;
     const cleanup = window.copilotAPI.onEvent((event: unknown) => {
       if (event && typeof event === 'object' && 'type' in event && (event as { type: string }).type === 'session.idle') {
         setGenerating(false);
@@ -48,14 +49,14 @@ export default function PromptBar({ onSend, onGeneratingChange }: PromptBarProps
     const trimmed = prompt.trim();
     if (!trimmed || isGenerating) return;
     play('leverPull');
-    window.copilotAPI.sendMessage(trimmed);
+    window.copilotAPI?.sendMessage(trimmed);
     setGenerating(true);
     onSend?.(trimmed);
     setPrompt('');
   }, [prompt, isGenerating, play, setGenerating, onSend]);
 
   const handleAbort = useCallback(() => {
-    window.copilotAPI.abort();
+    window.copilotAPI?.abort();
     setGenerating(false);
   }, [setGenerating]);
 

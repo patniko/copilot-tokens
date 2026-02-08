@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers } from './ipc-handlers';
+import { CopilotService } from './copilot-service';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -14,11 +15,13 @@ function createWindow(): void {
     backgroundColor: '#0d1117',
     frame: true,
     webPreferences: {
-      preload: path.join(__dirname, `../preload/preload.js`),
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  registerIpcHandlers(mainWindow);
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
@@ -27,13 +30,12 @@ function createWindow(): void {
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
     );
   }
-
-  registerIpcHandlers(mainWindow);
 }
 
 app.on('ready', createWindow);
 
 app.on('window-all-closed', () => {
+  CopilotService.getInstance().stop().catch(console.error);
   if (process.platform !== 'darwin') {
     app.quit();
   }

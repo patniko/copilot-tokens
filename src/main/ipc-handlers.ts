@@ -8,16 +8,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('copilot:sendMessage', async (_event, prompt: string) => {
     try {
-      for await (const event of copilot.sendMessage(prompt)) {
+      await copilot.sendMessage(prompt, (event) => {
         mainWindow.webContents.send('copilot:event', event);
-      }
+      });
     } catch (err) {
       console.error('[IPC] copilot:sendMessage error:', err);
+      mainWindow.webContents.send('copilot:event', { type: 'session.idle' });
     }
   });
 
-  ipcMain.handle('copilot:abort', () => {
-    copilot.abort();
+  ipcMain.handle('copilot:abort', async () => {
+    await copilot.abort();
   });
 
   ipcMain.handle('stats:getTopSessions', (_event, limit: number) => {

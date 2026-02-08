@@ -63,6 +63,7 @@ export default function ReelArea({ userPrompt, onUserMessage }: ReelAreaProps) {
 
   // Listen to copilot events
   useEffect(() => {
+    if (!window.copilotAPI?.onEvent) return;
     const unsubscribe = window.copilotAPI.onEvent((raw: unknown) => {
       const event = raw as CopilotEvent;
 

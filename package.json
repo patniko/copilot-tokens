@@ -27,6 +27,7 @@
     "vite": "^7.3.1"
   },
   "dependencies": {
+    "@github/copilot-sdk": "^0.1.23",
     "@tailwindcss/vite": "^4.1.18",
     "canvas-confetti": "^1.9.4",
     "electron-store": "^11.0.2",
