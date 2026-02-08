@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld('gitAPI', {
   },
 });
 
+contextBridge.exposeInMainWorld('utilAPI', {
+  saveTempImage(buffer: ArrayBuffer, ext: string): Promise<string> {
+    return ipcRenderer.invoke('util:saveTempImage', Buffer.from(buffer), ext);
+  },
+});
+
 contextBridge.exposeInMainWorld('cwdAPI', {
   get(): Promise<string> {
     return ipcRenderer.invoke('cwd:get');

@@ -1,5 +1,7 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { ipcMain, BrowserWindow, dialog, app } from 'electron';
 import { execFile } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { CopilotService } from './copilot-service';
 import { StatsService, SessionStats } from './stats-service';
 
@@ -92,5 +94,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         }
       });
     });
+  });
+
+  let tempCounter = 0;
+  ipcMain.handle('util:saveTempImage', async (_event, buffer: Buffer, ext: string) => {
+    const tmpDir = app.getPath('temp');
+    const filename = `github-tokens-paste-${Date.now()}-${tempCounter++}.${ext || 'png'}`;
+    const filePath = join(tmpDir, filename);
+    await writeFile(filePath, buffer);
+    return filePath;
   });
 }

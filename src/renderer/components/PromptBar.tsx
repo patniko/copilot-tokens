@@ -111,20 +111,23 @@ export default function PromptBar({ onSend, onGeneratingChange }: PromptBarProps
     }
   };
 
-  // Paste handler for images
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+  // Paste handler for images — saves to temp file for SDK
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
-    const imageFiles: File[] = [];
     for (const item of Array.from(items)) {
       if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
-        if (file) imageFiles.push(file);
+        if (!file) continue;
+        const ext = file.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+        const buffer = await file.arrayBuffer();
+        const savedPath = await window.utilAPI?.saveTempImage(buffer, ext);
+        if (savedPath) {
+          const previewUrl = URL.createObjectURL(file);
+          setAttachments(prev => [...prev, { path: savedPath, name: `pasted.${ext}`, previewUrl }]);
+        }
       }
     }
-    if (imageFiles.length) {
-      addFiles(imageFiles);
-    }
-  }, [addFiles]);
+  }, []);
 
   // Drag-and-drop handlers
   const [isDragging, setIsDragging] = useState(false);
@@ -195,7 +198,7 @@ export default function PromptBar({ onSend, onGeneratingChange }: PromptBarProps
         )}
       </AnimatePresence>
 
-      <div className="flex items-end gap-3">
+      <div className="flex items-center gap-3">
         {/* Attach button */}
         <button
           onClick={() => fileInputRef.current?.click()}

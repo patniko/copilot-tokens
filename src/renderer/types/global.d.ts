@@ -26,12 +26,17 @@ interface CwdAPI {
   gitInfo(dir: string): Promise<{ isRepo: boolean; branch?: string }>;
 }
 
+interface UtilAPI {
+  saveTempImage(buffer: ArrayBuffer, ext: string): Promise<string>;
+}
+
 declare global {
   interface Window {
     copilotAPI: CopilotAPI;
     statsAPI: StatsAPI;
     gitAPI: GitAPI;
     cwdAPI: CwdAPI;
+    utilAPI: UtilAPI;
   }
 }
 
