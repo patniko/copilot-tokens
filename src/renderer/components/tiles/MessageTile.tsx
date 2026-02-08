@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import Markdown from 'react-markdown';
 
 interface MessageTileProps {
@@ -5,7 +6,31 @@ interface MessageTileProps {
   isStreaming: boolean;
 }
 
+/**
+ * Collapse single newlines to spaces (preserving double-newline paragraph breaks and code blocks).
+ * Streaming deltas often insert `\n` mid-sentence which markdown renders as <br>.
+ */
+function normalizeNewlines(text: string): string {
+  // Protect fenced code blocks from being modified
+  const blocks: string[] = [];
+  const placeholder = '\x00CB\x00';
+  let normalized = text.replace(/```[\s\S]*?```/g, (match) => {
+    blocks.push(match);
+    return placeholder;
+  });
+
+  // Collapse single \n (not preceded/followed by another \n) into space
+  normalized = normalized.replace(/([^\n])\n([^\n])/g, '$1 $2');
+
+  // Restore code blocks
+  let i = 0;
+  normalized = normalized.replace(new RegExp(placeholder.replace(/\x00/g, '\\x00'), 'g'), () => blocks[i++]);
+
+  return normalized;
+}
+
 export default function MessageTile({ content, isStreaming }: MessageTileProps) {
+  const normalizedContent = useMemo(() => normalizeNewlines(content), [content]);
   return (
     <div className="w-full text-left overflow-hidden message-markdown" style={{ color: 'var(--text-primary)' }}>
       <Markdown
@@ -43,7 +68,7 @@ export default function MessageTile({ content, isStreaming }: MessageTileProps) 
           },
         }}
       >
-        {content}
+        {normalizedContent}
       </Markdown>
       {isStreaming && (
         <span

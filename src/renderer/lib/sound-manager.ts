@@ -1,4 +1,4 @@
-export type SoundName = 'leverPull' | 'tokenTick' | 'milestone' | 'jackpot' | 'commit' | 'error' | 'celebration100k' | 'celebration500k';
+export type SoundName = 'leverPull' | 'tokenTick' | 'milestone' | 'jackpot' | 'commit' | 'error' | 'celebration100k' | 'celebration500k' | 'yoloOn' | 'yoloOff';
 
 type SoundGenerator = (ctx: AudioContext, dest: GainNode) => void;
 
@@ -307,6 +307,83 @@ const sounds: Record<SoundName, SoundGenerator> = {
     osc.connect(gain).connect(dest);
     osc.start(t);
     osc.stop(t + 0.2);
+  },
+
+  // YOLO ON — ignition rev-up with a rising power chord
+  yoloOn(ctx, dest) {
+    const t = ctx.currentTime;
+
+    // Distorted power sweep
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(80, t);
+    osc.frequency.exponentialRampToValueAtTime(300, t + 0.15);
+    osc.frequency.exponentialRampToValueAtTime(600, t + 0.35);
+    const dist = ctx.createWaveShaper();
+    const curve = new Float32Array(256);
+    for (let i = 0; i < 256; i++) {
+      const x = (i * 2) / 255 - 1;
+      curve[i] = (Math.PI + 4) * x / (Math.PI + 4 * Math.abs(x));
+    }
+    dist.curve = curve;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.35, t + 0.05);
+    gain.gain.setValueAtTime(0.35, t + 0.3);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    osc.connect(dist).connect(gain).connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.5);
+
+    // Bright stinger on top
+    const stinger = ctx.createOscillator();
+    stinger.type = 'square';
+    stinger.frequency.setValueAtTime(880, t + 0.15);
+    stinger.frequency.setValueAtTime(1320, t + 0.25);
+    const sGain = ctx.createGain();
+    sGain.gain.setValueAtTime(0, t + 0.15);
+    sGain.gain.linearRampToValueAtTime(0.2, t + 0.18);
+    sGain.gain.setValueAtTime(0.2, t + 0.3);
+    sGain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+    const sFilter = ctx.createBiquadFilter();
+    sFilter.type = 'lowpass';
+    sFilter.frequency.value = 3000;
+    stinger.connect(sFilter).connect(sGain).connect(dest);
+    stinger.start(t + 0.15);
+    stinger.stop(t + 0.45);
+  },
+
+  // YOLO OFF — power-down descending whine
+  yoloOff(ctx, dest) {
+    const t = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(500, t);
+    osc.frequency.exponentialRampToValueAtTime(60, t + 0.6);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(3000, t);
+    filter.frequency.exponentialRampToValueAtTime(200, t + 0.6);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.setValueAtTime(0.25, t + 0.3);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    osc.connect(filter).connect(gain).connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.7);
+
+    // Sad low thud at the end
+    const thud = ctx.createOscillator();
+    thud.type = 'sine';
+    thud.frequency.value = 80;
+    const tGain = ctx.createGain();
+    tGain.gain.setValueAtTime(0, t + 0.4);
+    tGain.gain.linearRampToValueAtTime(0.3, t + 0.42);
+    tGain.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    thud.connect(tGain).connect(dest);
+    thud.start(t + 0.4);
+    thud.stop(t + 0.7);
   },
 };
 

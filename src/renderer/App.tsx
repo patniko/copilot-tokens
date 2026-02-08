@@ -17,6 +17,7 @@ import LevelUpOverlay from './components/LevelUpOverlay';
 import { useSessionRecorder } from './hooks/useSessionRecorder';
 import { addSessionToProgress, type LevelProgress } from './lib/level-system';
 import { partyBus, PartyEvents } from './lib/party-bus';
+import SoundManager from './lib/sound-manager';
 import type { PermissionRequestData, PermissionDecision } from './components/PermissionDialog';
 import { useMilestones } from './hooks/useMilestones';
 
@@ -403,6 +404,7 @@ export default function App() {
                 const next = !yoloMode;
                 setYoloMode(next);
                 window.copilotAPI?.setYoloMode(next);
+                SoundManager.getInstance().play(next ? 'yoloOn' : 'yoloOff');
                 if (next) {
                   setYoloFlash(true);
                   setTimeout(() => setYoloFlash(false), 1200);

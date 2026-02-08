@@ -53,10 +53,7 @@ body {
 .led-text {
   font-family: 'JetBrains Mono', monospace;
   letter-spacing: 0.1em;
-  text-shadow:
-    0 0 7px currentColor,
-    0 0 10px currentColor,
-    0 0 21px currentColor;
+  text-shadow: 0 0 4px currentColor;
 }
 
 /* Persistent border glow for 500K+ token sessions */
