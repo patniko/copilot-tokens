@@ -3,9 +3,10 @@ import type { GitHubUser, AuthSource } from '../../main/auth-service';
 import type { MilestonePack, SoundPack, ThemePack } from '../lib/pack-types';
 
 interface CopilotAPI {
-  sendMessage(prompt: string, attachments?: { path: string }[]): void;
-  abort(): void;
-  onEvent(callback: (event: unknown) => void): () => void;
+  sendMessage(prompt: string, attachments?: { path: string }[], panelId?: string): void;
+  abort(panelId?: string): void;
+  destroySession(panelId: string): void;
+  onEvent(callback: (event: unknown) => void, panelId?: string): () => void;
   onPermissionRequest(callback: (request: unknown) => void): () => void;
   respondPermission(decision: string, rulePathPrefix?: string): void;
   addPermissionRule(kind: string, pathPrefix: string): Promise<void>;

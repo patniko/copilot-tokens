@@ -1,12 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import logoImg from '../../logo-128.png';
 import { ThemeProvider } from './lib/themes';
-import PromptBar from './components/PromptBar';
 import TokenDashboard from './components/TokenDashboard';
 import type { DashboardStats } from './components/TokenDashboard';
 import Leaderboard from './components/Leaderboard';
 import Settings from './components/Settings';
-import ReelArea from './components/ReelArea';
+import SplitLayout from './components/SplitLayout';
 import CommitButton from './components/CommitButton';
 import MilestoneOverlay from './components/MilestoneOverlay';
 import AvatarMenu from './components/AvatarMenu';
@@ -37,8 +36,10 @@ export default function App() {
   const [inputTokens, setInputTokens] = useState(0);
   const [cwd, setCwd] = useState('');
   const [gitBranch, setGitBranch] = useState<string | null>(null);
-  const [currentModel, setCurrentModel] = useState('claude-sonnet-4');
+  const [currentModel, setCurrentModel] = useState('');
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string; contextWindow: number }[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelsError, setModelsError] = useState<string | null>(null);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const { activeMilestone, checkStats, dismissMilestone } = useMilestones();
   const sessionRecorder = useSessionRecorder();
@@ -57,6 +58,11 @@ export default function App() {
 
   // Reset key — incrementing remounts ReelArea + TokenDashboard
   const [resetKey, setResetKey] = useState(0);
+
+  // Split panel state
+  const [isSplit, setIsSplit] = useState(false);
+  const [userPromptRight, setUserPromptRight] = useState<string | null>(null);
+  const [resetKeyRight, setResetKeyRight] = useState(0);
 
   const handleReset = useCallback(() => {
     setInputTokens(0);
@@ -115,8 +121,20 @@ export default function App() {
       });
     }
     if (window.modelAPI) {
-      window.modelAPI.get().then(setCurrentModel);
-      window.modelAPI.list().then(setAvailableModels).catch(() => {});
+      setModelsLoading(true);
+      setModelsError(null);
+      window.modelAPI.list().then((models) => {
+        setAvailableModels(models);
+        // Set current model from backend preference, or first available
+        window.modelAPI!.get().then((saved) => {
+          const match = models.find(m => m.id === saved);
+          setCurrentModel(match ? saved : models[0]?.id ?? '');
+          setModelsLoading(false);
+        });
+      }).catch((err) => {
+        setModelsError(err?.message || 'Failed to load models');
+        setModelsLoading(false);
+      });
     }
     if (window.mcpAPI) {
       window.mcpAPI.list().then(setMcpServers).catch(() => {});
@@ -138,7 +156,25 @@ export default function App() {
   const handleModelSwitch = useCallback((modelId: string) => {
     setCurrentModel(modelId);
     setModelDropdownOpen(false);
+    setModelsError(null);
     window.modelAPI?.set(modelId);
+  }, []);
+
+  const retryLoadModels = useCallback(() => {
+    if (!window.modelAPI) return;
+    setModelsLoading(true);
+    setModelsError(null);
+    window.modelAPI.list().then((models) => {
+      setAvailableModels(models);
+      window.modelAPI!.get().then((saved) => {
+        const match = models.find(m => m.id === saved);
+        setCurrentModel(match ? saved : models[0]?.id ?? '');
+        setModelsLoading(false);
+      });
+    }).catch((err) => {
+      setModelsError(err?.message || 'Failed to load models');
+      setModelsLoading(false);
+    });
   }, []);
 
   const handleBrowseCwd = useCallback(async () => {
@@ -164,13 +200,12 @@ export default function App() {
     setInputTokens((prev) => prev + input);
   }, []);
 
-  // Track changed files from copilot events
+  // Track changed files from copilot events (listen on main panel)
   useEffect(() => {
     if (!window.copilotAPI?.onEvent) return;
-    const unsub = window.copilotAPI.onEvent((event: unknown) => {
+    const handler = (event: unknown) => {
       const ev = event as Record<string, unknown> | null;
       if (!ev || typeof ev !== 'object') return;
-      // Handle both old and new event shapes for file tracking
       if (ev.type === 'tool.start') {
         const toolName = ev.toolName as string | undefined;
         const args = (ev.args ?? {}) as Record<string, unknown>;
@@ -181,21 +216,43 @@ export default function App() {
           }
         }
       }
-    });
-    return unsub;
+    };
+    const unsub1 = window.copilotAPI.onEvent(handler, 'main');
+    const unsub2 = window.copilotAPI.onEvent(handler, 'split');
+    return () => { unsub1(); unsub2(); };
   }, []);
 
   const handleSend = useCallback((prompt: string) => {
+    if (!currentModel) {
+      setModelsError(modelsLoading ? 'Models are still loading, please wait…' : 'No model selected. Please select a model first.');
+      return;
+    }
     if (!sessionStartRef.current) sessionStartRef.current = Date.now();
     setAgentActive(true);
     setUserPrompt(prompt);
     requestAnimationFrame(() => setUserPrompt(null));
+  }, [currentModel, modelsLoading]);
+
+  const handleSendRight = useCallback((prompt: string) => {
+    if (!currentModel) {
+      setModelsError(modelsLoading ? 'Models are still loading, please wait…' : 'No model selected. Please select a model first.');
+      return;
+    }
+    if (!sessionStartRef.current) sessionStartRef.current = Date.now();
+    setAgentActive(true);
+    setUserPromptRight(prompt);
+    requestAnimationFrame(() => setUserPromptRight(null));
+  }, [currentModel, modelsLoading]);
+
+  const handleCloseSplit = useCallback(() => {
+    setIsSplit(false);
+    window.copilotAPI?.destroySession('split');
   }, []);
 
   // Record session to leaderboard when agent goes idle
   useEffect(() => {
     if (!window.copilotAPI?.onEvent) return;
-    const unsub = window.copilotAPI.onEvent((event: unknown) => {
+    const handler = (event: unknown) => {
       const ev = event as Record<string, unknown> | null;
       if (!ev || typeof ev !== 'object' || ev.type !== 'session.idle') return;
       setAgentActive(false);
@@ -246,8 +303,10 @@ export default function App() {
           });
         });
       }
-    });
-    return unsub;
+    };
+    const unsub1 = window.copilotAPI.onEvent(handler, 'main');
+    const unsub2 = window.copilotAPI.onEvent(handler, 'split');
+    return () => { unsub1(); unsub2(); };
   }, []);
 
   return (
@@ -271,6 +330,16 @@ export default function App() {
           </div>
           <div className="absolute right-4 flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} />
+            <button
+              onClick={() => setIsSplit((s) => !s)}
+              className={`text-sm text-[var(--text-secondary)] hover:text-[var(--accent-purple)] hover:scale-110 transition-all cursor-pointer px-2.5 py-2.5 rounded border border-[var(--border-color)] bg-[var(--bg-primary)] ${isSplit ? 'text-[var(--accent-purple)] bg-[var(--accent-purple)]/10' : ''}`}
+              title={isSplit ? 'Close split' : 'Split panel'}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <rect x="1" y="2" width="14" height="12" rx="1" />
+                <line x1="8" y1="2" x2="8" y2="14" />
+              </svg>
+            </button>
             <div className="relative flex items-center">
               <button
                 onClick={handleReset}
@@ -325,11 +394,18 @@ export default function App() {
           <span className="text-[var(--border-color)]">|</span>
           <div className="relative">
             <button
-              onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
-              className="text-[var(--accent-purple)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer flex items-center gap-1"
+              onClick={() => modelsError ? retryLoadModels() : setModelDropdownOpen(!modelDropdownOpen)}
+              className={`transition-colors cursor-pointer flex items-center gap-1 ${
+                modelsError ? 'text-red-400 hover:text-red-300' :
+                modelsLoading ? 'text-[var(--text-secondary)]' :
+                'text-[var(--accent-purple)] hover:text-[var(--accent-gold)]'
+              }`}
+              title={modelsError ?? undefined}
             >
-              🧠 {availableModels.find(m => m.id === currentModel)?.name || currentModel}
-              <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
+              {modelsLoading ? '⏳ Loading models…' :
+               modelsError ? '⚠️ Models unavailable — click to retry' :
+               <>🧠 {availableModels.find(m => m.id === currentModel)?.name || currentModel}</>}
+              {!modelsLoading && !modelsError && <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>}
             </button>
             {modelDropdownOpen && (
               <>
@@ -444,6 +520,25 @@ export default function App() {
           </div>
         </div>
 
+        {/* Model error/loading banner */}
+        {modelsError && !modelsLoading && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-red-900/30 border-b border-red-500/30 text-xs text-red-300">
+            <span>⚠️ {modelsError}</span>
+            <button
+              onClick={retryLoadModels}
+              className="ml-auto px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-200 transition-colors cursor-pointer"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => setModelsError(null)}
+              className="text-red-400 hover:text-red-200 transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Main Content */}
         <main className="flex flex-1 overflow-hidden">
           {/* Token Dashboard (Left Panel) */}
@@ -478,10 +573,21 @@ export default function App() {
                 onClose={() => setSessionBrowserOpen(false)}
               />
             ) : (
-              <>
-                <ReelArea key={resetKey} userPrompt={userPrompt} onUsage={handleUsage} permissionRequest={permissionRequest} onPermissionRespond={handlePermissionRespond} />
-                <PromptBar onSend={handleSend} cwd={cwd} onBrowseCwd={handleBrowseCwd} />
-              </>
+              <SplitLayout
+                isSplit={isSplit}
+                onCloseSplit={handleCloseSplit}
+                userPrompt={userPrompt}
+                onUsage={handleUsage}
+                onSend={handleSend}
+                cwd={cwd}
+                onBrowseCwd={handleBrowseCwd}
+                permissionRequest={permissionRequest}
+                onPermissionRespond={handlePermissionRespond}
+                resetKey={resetKey}
+                userPromptRight={userPromptRight}
+                onSendRight={handleSendRight}
+                resetKeyRight={resetKeyRight}
+              />
             )}
           </section>
         </main>

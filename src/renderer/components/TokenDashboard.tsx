@@ -129,11 +129,12 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
     });
   }, []);
 
-  // Subscribe to copilot events
+  // Subscribe to copilot events (both panels)
   useEffect(() => {
     if (!window.copilotAPI?.onEvent) return;
-    const unsub = window.copilotAPI.onEvent(handleEvent);
-    return unsub;
+    const unsub1 = window.copilotAPI.onEvent(handleEvent, 'main');
+    const unsub2 = window.copilotAPI.onEvent(handleEvent, 'split');
+    return () => { unsub1(); unsub2(); };
   }, [handleEvent]);
 
   const totalTokens = stats.inputTokens + stats.outputTokens;

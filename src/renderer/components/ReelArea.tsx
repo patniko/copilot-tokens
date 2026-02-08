@@ -22,6 +22,7 @@ import PermissionDialog from './PermissionDialog';
 import type { PermissionRequestData, PermissionDecision } from './PermissionDialog';
 
 interface ReelAreaProps {
+  panelId?: string;
   userPrompt: string | null;
   onUserMessage?: (msg: UserMessage) => void;
   onUsage?: (input: number, output: number) => void;
@@ -71,7 +72,7 @@ function toolTitleFromArgs(toolName: string, toolType: ToolCallMessage['toolType
 }
 
 
-export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissionRequest, onPermissionRespond }: ReelAreaProps) {
+export default function ReelArea({ panelId, userPrompt, onUserMessage, onUsage, permissionRequest, onPermissionRespond }: ReelAreaProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [intent, setIntent] = useState<string | null>(null);
   const [isWaiting, setIsWaiting] = useState(false);
@@ -104,7 +105,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
     }
   }, [userPrompt, onUserMessage]);
 
-  // Listen to copilot events
+  // Listen to copilot events (panel-specific channel)
   useEffect(() => {
     if (!window.copilotAPI?.onEvent) return;
     const unsubscribe = window.copilotAPI.onEvent((raw: unknown) => {
@@ -297,10 +298,10 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
           break;
         }
       }
-    });
+    }, panelId);
 
     return unsubscribe;
-  }, [onUsage]);
+  }, [onUsage, panelId]);
 
   // Elapsed time timer while generating
   useEffect(() => {

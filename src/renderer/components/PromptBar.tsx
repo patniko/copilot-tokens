@@ -9,6 +9,7 @@ interface Attachment {
 }
 
 interface PromptBarProps {
+  panelId?: string;
   onSend?: (prompt: string, attachments?: { path: string }[]) => void;
   onGeneratingChange?: (generating: boolean) => void;
   cwd?: string;
@@ -24,7 +25,7 @@ function isImageFile(name: string): boolean {
   return IMAGE_EXTENSIONS.has(ext);
 }
 
-export default function PromptBar({ onSend, onGeneratingChange, cwd, onBrowseCwd }: PromptBarProps) {
+export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, onBrowseCwd }: PromptBarProps) {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -47,9 +48,9 @@ export default function PromptBar({ onSend, onGeneratingChange, cwd, onBrowseCwd
       if (event && typeof event === 'object' && 'type' in event && (event as { type: string }).type === 'session.idle') {
         setGenerating(false);
       }
-    });
+    }, panelId);
     return cleanup;
-  }, [setGenerating]);
+  }, [setGenerating, panelId]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -98,18 +99,17 @@ export default function PromptBar({ onSend, onGeneratingChange, cwd, onBrowseCwd
     if ((!trimmed && attachments.length === 0) || isGenerating) return;
     play('leverPull');
     const atts = attachments.length > 0 ? attachments.map(a => ({ path: a.path })) : undefined;
-    window.copilotAPI?.sendMessage(trimmed || 'Describe this image.', atts);
+    window.copilotAPI?.sendMessage(trimmed || 'Describe this image.', atts, panelId);
     setGenerating(true);
     onSend?.(trimmed || 'Describe this image.', atts);
     setPrompt('');
     setAttachments([]);
-  }, [cwd, onBrowseCwd, prompt, attachments, isGenerating, play, setGenerating, onSend]);
+  }, [cwd, onBrowseCwd, prompt, attachments, isGenerating, play, setGenerating, onSend, panelId]);
 
   const handleAbort = useCallback(() => {
-    window.copilotAPI?.abort();
+    window.copilotAPI?.abort(panelId);
     setGenerating(false);
-  }, [setGenerating]);
-
+  }, [setGenerating, panelId]);
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
