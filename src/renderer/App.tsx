@@ -293,7 +293,7 @@ export default function App() {
           {/* Token Dashboard (Left Panel) */}
           <aside className="w-64 shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] p-4 flex flex-col gap-4 overflow-y-auto">
             <h2 className="text-sm uppercase tracking-wider text-[var(--text-secondary)]">Token Dashboard</h2>
-            <TokenDashboard key={resetKey} inputTokenCount={inputTokens} onStatsUpdate={handleStatsUpdate} />
+            <TokenDashboard key={resetKey} inputTokenCount={inputTokens} contextWindow={availableModels.find(m => m.id === currentModel)?.contextWindow} onStatsUpdate={handleStatsUpdate} />
             <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} />
           </aside>
 

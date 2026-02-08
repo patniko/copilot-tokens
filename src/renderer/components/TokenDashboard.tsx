@@ -14,6 +14,7 @@ export interface DashboardStats {
 
 interface TokenDashboardProps {
   inputTokenCount?: number;
+  contextWindow?: number;
   onStatsUpdate?: (stats: DashboardStats) => void;
 }
 
@@ -27,7 +28,7 @@ const initialStats: DashboardStats = {
   toolCalls: 0,
 };
 
-export default function TokenDashboard({ inputTokenCount, onStatsUpdate }: TokenDashboardProps) {
+export default function TokenDashboard({ inputTokenCount, contextWindow, onStatsUpdate }: TokenDashboardProps) {
   const [stats, setStats] = useState<DashboardStats>(initialStats);
   const [gitStats, setGitStats] = useState({ filesChanged: 0, linesAdded: 0, linesRemoved: 0 });
   const statsRef = useRef(stats);
@@ -126,7 +127,7 @@ export default function TokenDashboard({ inputTokenCount, onStatsUpdate }: Token
 
       {/* Context Usage */}
       <Section title="Context Window">
-        <ContextProgressBar usedTokens={stats.inputTokens} />
+        <ContextProgressBar usedTokens={totalTokens} maxTokens={contextWindow} />
       </Section>
 
       {/* File Stats */}
