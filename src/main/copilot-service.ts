@@ -23,6 +23,7 @@ export type CopilotEvent =
   | { type: 'subagent.started'; toolCallId: string; name: string; displayName: string; description: string }
   | { type: 'subagent.completed'; toolCallId: string; name: string }
   | { type: 'subagent.failed'; toolCallId: string; name: string; error: string }
+  | { type: 'session.usage_info'; currentTokens: number; tokenLimit: number }
   | { type: 'session.idle' };
 
 export type EventCallback = (event: CopilotEvent) => void;
@@ -340,6 +341,15 @@ export class CopilotService {
               toolCallId: data.toolCallId ?? '',
               name: data.name ?? '',
               error: data.error ?? 'Unknown error',
+            });
+            break;
+          }
+          case 'session.usage_info': {
+            const data = event.data as { currentTokens?: number; tokenLimit?: number };
+            onEvent({
+              type: 'session.usage_info',
+              currentTokens: data.currentTokens ?? 0,
+              tokenLimit: data.tokenLimit ?? 0,
             });
             break;
           }

@@ -35,6 +35,7 @@ const initialStats: DashboardStats = {
 export default function TokenDashboard({ inputTokenCount, contextWindow, onStatsUpdate, panelIds }: TokenDashboardProps) {
   const [stats, setStats] = useState<DashboardStats>(initialStats);
   const [gitStats, setGitStats] = useState<{ filesChanged: number; linesAdded: number; linesRemoved: number } | null>(null);
+  const [contextUsage, setContextUsage] = useState<{ currentTokens: number; tokenLimit: number } | null>(null);
   const statsRef = useRef(stats);
 
   // Keep ref in sync for event callbacks
@@ -84,6 +85,14 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
     if (!ev || typeof ev !== 'object') return;
     const type = ev.type as string | undefined;
     if (!type) return;
+
+    if (type === 'session.usage_info') {
+      setContextUsage({
+        currentTokens: (ev.currentTokens ?? 0) as number,
+        tokenLimit: (ev.tokenLimit ?? 0) as number,
+      });
+      return;
+    }
 
     setStats((prev) => {
       const next = { ...prev };
@@ -153,7 +162,10 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
 
       {/* Context Usage */}
       <Section title="Context Window">
-        <ContextProgressBar usedTokens={stats.inputTokens} maxTokens={contextWindow} />
+        <ContextProgressBar
+          usedTokens={contextUsage?.currentTokens ?? stats.inputTokens}
+          maxTokens={contextUsage?.tokenLimit ?? contextWindow}
+        />
       </Section>
 
       {/* File Stats */}
