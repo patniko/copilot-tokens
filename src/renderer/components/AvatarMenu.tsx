@@ -84,7 +84,7 @@ export default function AvatarMenu({ onOpenSettings, onOpenLeaderboard, onOpenPa
       {/* Avatar button */}
       <button
         onClick={() => setOpen(!open)}
-        className="w-8 h-8 rounded-full overflow-hidden border-2 border-[var(--border-color)] hover:border-[var(--accent-gold)] transition-colors cursor-pointer flex items-center justify-center bg-[var(--bg-primary)]"
+        className="w-10 h-10 rounded-full overflow-hidden border-2 border-[var(--border-color)] hover:border-[var(--accent-gold)] transition-colors cursor-pointer flex items-center justify-center bg-[var(--bg-primary)]"
         title={activeUser ? `${activeUser.login}` : 'Account'}
       >
         {activeUser?.avatarUrl ? (
@@ -100,7 +100,7 @@ export default function AvatarMenu({ onOpenSettings, onOpenLeaderboard, onOpenPa
       {open && !deviceFlow && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl overflow-hidden">
+          <div className="absolute left-0 bottom-full mb-2 z-50 w-72 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl overflow-hidden">
             {/* Active account */}
             {activeUser && (
               <div className="px-4 py-3 flex items-center gap-3 border-b border-[var(--border-color)]">

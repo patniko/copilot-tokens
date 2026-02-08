@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import logoImg from '../../../logo-128.png';
 import type { CopilotEvent } from '../../main/copilot-service';
 import type {
   ConversationMessage,
@@ -330,7 +331,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
           transition={{ duration: 0.5 }}
           className="flex flex-col items-center gap-3"
         >
-          <img src="./logo-128.png" alt="Copilot Tokens" className="w-16 h-16 opacity-60" />
+          <img src={logoImg} alt="Copilot Tokens" className="w-16 h-16 opacity-60" />
           <p className="text-lg font-medium text-[var(--text-primary)]">What would you like to build?</p>
           <p className="text-sm max-w-md text-center leading-relaxed">
             Describe a task, paste an error, or ask a question — your agent will get to work.

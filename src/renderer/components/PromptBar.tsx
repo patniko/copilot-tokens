@@ -11,6 +11,8 @@ interface Attachment {
 interface PromptBarProps {
   onSend?: (prompt: string, attachments?: { path: string }[]) => void;
   onGeneratingChange?: (generating: boolean) => void;
+  cwd?: string;
+  onBrowseCwd?: () => void;
 }
 
 const LINE_HEIGHT = 24;
@@ -22,7 +24,7 @@ function isImageFile(name: string): boolean {
   return IMAGE_EXTENSIONS.has(ext);
 }
 
-export default function PromptBar({ onSend, onGeneratingChange }: PromptBarProps) {
+export default function PromptBar({ onSend, onGeneratingChange, cwd, onBrowseCwd }: PromptBarProps) {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -88,6 +90,10 @@ export default function PromptBar({ onSend, onGeneratingChange }: PromptBarProps
   }, []);
 
   const handleSend = useCallback(() => {
+    if (!cwd) {
+      onBrowseCwd?.();
+      return;
+    }
     const trimmed = prompt.trim();
     if ((!trimmed && attachments.length === 0) || isGenerating) return;
     play('leverPull');
@@ -97,7 +103,7 @@ export default function PromptBar({ onSend, onGeneratingChange }: PromptBarProps
     onSend?.(trimmed || 'Describe this image.', atts);
     setPrompt('');
     setAttachments([]);
-  }, [prompt, attachments, isGenerating, play, setGenerating, onSend]);
+  }, [cwd, onBrowseCwd, prompt, attachments, isGenerating, play, setGenerating, onSend]);
 
   const handleAbort = useCallback(() => {
     window.copilotAPI?.abort();

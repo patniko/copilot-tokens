@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import logoImg from '../../logo-128.png';
 import { ThemeProvider } from './lib/themes';
 import PromptBar from './components/PromptBar';
 import TokenDashboard from './components/TokenDashboard';
@@ -254,11 +255,14 @@ export default function App() {
       <div className={`flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono${superMode ? ' super-border' : ''}`}>
         {/* Title Bar */}
         <header className="flex items-center justify-center py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative">
+          <div className="absolute left-4 flex items-center">
+            <LevelBadge compact />
+          </div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-widest text-[var(--accent-gold)] neon-glow flex items-center gap-2">
               COPILOT
               <img
-                src="./logo-128.png"
+                src={logoImg}
                 alt="Copilot Tokens"
                 className={`w-7 h-7${agentActive ? ' logo-bounce' : ''}`}
               />
@@ -266,21 +270,21 @@ export default function App() {
             </h1>
           </div>
           <div className="absolute right-4 flex items-center gap-2">
-            <LevelBadge compact />
+            <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} />
             <div className="relative flex items-center">
               <button
                 onClick={handleReset}
-                className="text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--accent-gold)] hover:scale-110 transition-all cursor-pointer px-1.5 py-0.5 rounded-l border border-[var(--border-color)] border-r-0 bg-[var(--bg-primary)]"
+                className="text-sm font-bold text-[var(--text-secondary)] hover:text-[var(--accent-gold)] hover:scale-110 transition-all cursor-pointer px-3 py-2.5 rounded-l border border-[var(--border-color)] border-r-0 bg-[var(--bg-primary)]"
                 title="New Chat"
               >
                 +
               </button>
               <button
                 onClick={() => setSessionMenuOpen(!sessionMenuOpen)}
-                className="text-[var(--text-secondary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer px-1 py-0.5 rounded-r border border-[var(--border-color)] bg-[var(--bg-primary)] flex items-center"
+                className="text-[var(--text-secondary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer px-2.5 py-2.5 rounded-r border border-[var(--border-color)] bg-[var(--bg-primary)] flex items-center"
                 title="Session options"
               >
-                <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${sessionMenuOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
+                <svg width="12" height="12" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${sessionMenuOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
               </button>
               {sessionMenuOpen && (
                 <>
@@ -296,18 +300,12 @@ export default function App() {
                 </>
               )}
             </div>
-            <AvatarMenu
-              onOpenSettings={() => { setSettingsOpen(true); setLeaderboardOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
-              onOpenLeaderboard={() => { setLeaderboardOpen(true); setSettingsOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
-              onOpenPackStudio={() => { setPackStudioOpen(true); setSettingsOpen(false); setLeaderboardOpen(false); setTrophyCaseOpen(false); }}
-              onOpenTrophyCase={() => { setTrophyCaseOpen(true); setSettingsOpen(false); setLeaderboardOpen(false); setPackStudioOpen(false); }}
-            />
           </div>
         </header>
 
         {/* CWD Status Bar */}
         <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-color)] bg-[var(--bg-primary)] text-xs">
-          <span className="text-[var(--text-secondary)]">📂</span>
+          <span className={!cwd ? 'text-red-500' : 'text-[var(--text-secondary)]'}>{!cwd ? '⚠️' : '📂'}</span>
           <button
             onClick={handleBrowseCwd}
             className="font-mono text-[var(--text-primary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer truncate max-w-[600px]"
@@ -455,7 +453,12 @@ export default function App() {
               <TokenDashboard key={resetKey} inputTokenCount={inputTokens} contextWindow={availableModels.find(m => m.id === currentModel)?.contextWindow} onStatsUpdate={handleStatsUpdate} />
             </div>
             <div className="shrink-0">
-              <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} />
+              <AvatarMenu
+                onOpenSettings={() => { setSettingsOpen(true); setLeaderboardOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
+                onOpenLeaderboard={() => { setLeaderboardOpen(true); setSettingsOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
+                onOpenPackStudio={() => { setPackStudioOpen(true); setSettingsOpen(false); setLeaderboardOpen(false); setTrophyCaseOpen(false); }}
+                onOpenTrophyCase={() => { setTrophyCaseOpen(true); setSettingsOpen(false); setLeaderboardOpen(false); setPackStudioOpen(false); }}
+              />
             </div>
           </aside>
 
@@ -477,7 +480,7 @@ export default function App() {
             ) : (
               <>
                 <ReelArea key={resetKey} userPrompt={userPrompt} onUsage={handleUsage} permissionRequest={permissionRequest} onPermissionRespond={handlePermissionRespond} />
-                <PromptBar onSend={handleSend} />
+                <PromptBar onSend={handleSend} cwd={cwd} onBrowseCwd={handleBrowseCwd} />
               </>
             )}
           </section>

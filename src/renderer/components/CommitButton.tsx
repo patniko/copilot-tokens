@@ -14,32 +14,31 @@ type ModalStep = 'reels' | 'editor' | 'diff' | 'committing' | 'success' | 'error
 
 export default function CommitButton({ changedFiles, visible, onSendFeedback }: CommitButtonProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  const disabled = !visible;
 
   return (
     <>
-      <AnimatePresence>
-        {visible && (
-          <motion.button
-            initial={{ scale: 0 }}
-            animate={{
-              scale: [1, 1.05, 1],
-              transition: {
-                scale: { repeat: Infinity, duration: 1.5, ease: 'easeInOut' },
-              },
-            }}
-            exit={{ scale: 0 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-            onClick={() => setModalOpen(true)}
-            className="w-full py-2 rounded-lg font-bold text-black cursor-pointer"
-            style={{
-              backgroundColor: 'var(--accent-gold)',
-              boxShadow: '0 0 15px rgba(251,191,36,0.5), 0 0 30px rgba(251,191,36,0.3)',
-            }}
-          >
-            🎰 COMMIT
-          </motion.button>
-        )}
-      </AnimatePresence>
+      <motion.button
+        animate={
+          disabled
+            ? { scale: 1 }
+            : {
+                scale: [1, 1.05, 1],
+                transition: {
+                  scale: { repeat: Infinity, duration: 1.5, ease: 'easeInOut' },
+                },
+              }
+        }
+        onClick={() => !disabled && setModalOpen(true)}
+        className={`px-8 py-2 rounded-lg font-bold text-black ${disabled ? 'opacity-40 cursor-default' : 'cursor-pointer'}`}
+        style={{
+          backgroundColor: 'var(--accent-gold)',
+          boxShadow: disabled ? 'none' : '0 0 15px rgba(251,191,36,0.5), 0 0 30px rgba(251,191,36,0.3)',
+        }}
+        disabled={disabled}
+      >
+        🎰 COMMIT
+      </motion.button>
 
       <AnimatePresence>
         {modalOpen && (

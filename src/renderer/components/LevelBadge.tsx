@@ -50,24 +50,24 @@ export default function LevelBadge({ compact }: LevelBadgeProps) {
     return (
       <button
         onClick={() => setExpanded(!expanded)}
-        className="relative flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-color)] hover:border-[var(--accent-gold)] transition-colors cursor-pointer text-xs"
+        className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-color)] hover:border-[var(--accent-gold)] transition-colors cursor-pointer text-sm"
         title={`Level ${progress.level} — ${tier.name}`}
       >
-        <span>{tier.emoji}</span>
-        <span className="font-bold text-[var(--accent-gold)] led-text">
+        <span className="text-lg">{tier.emoji}</span>
+        <span className="font-bold text-[var(--accent-gold)] led-text text-base">
           Lv.{progress.level}
         </span>
 
         {/* Mini progress ring */}
-        <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0">
-          <circle cx="8" cy="8" r="6" fill="none" stroke="var(--border-color)" strokeWidth="2" />
+        <svg width="20" height="20" viewBox="0 0 20 20" className="shrink-0">
+          <circle cx="10" cy="10" r="8" fill="none" stroke="var(--border-color)" strokeWidth="2" />
           <circle
-            cx="8" cy="8" r="6" fill="none"
+            cx="10" cy="10" r="8" fill="none"
             stroke="var(--accent-gold)"
             strokeWidth="2"
-            strokeDasharray={`${minCompletion * 37.7} 37.7`}
+            strokeDasharray={`${minCompletion * 50.3} 50.3`}
             strokeLinecap="round"
-            transform="rotate(-90 8 8)"
+            transform="rotate(-90 10 10)"
           />
         </svg>
 
@@ -75,7 +75,7 @@ export default function LevelBadge({ compact }: LevelBadgeProps) {
         <AnimatePresence>
           {expanded && (
             <motion.div
-              className="absolute top-full right-0 mt-2 w-72 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-4 shadow-xl z-50"
+              className="absolute top-full left-0 mt-2 w-72 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-4 shadow-xl z-50"
               initial={{ opacity: 0, y: -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.95 }}

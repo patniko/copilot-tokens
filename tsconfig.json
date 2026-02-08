@@ -12,6 +12,7 @@
     "jsx": "react-jsx",
     "outDir": "./dist",
     "baseUrl": ".",
+    "types": ["vite/client"],
     "paths": {
       "@renderer/*": ["src/renderer/*"],
       "@main/*": ["src/main/*"]
