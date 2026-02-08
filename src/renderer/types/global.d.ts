@@ -10,6 +10,8 @@ interface CopilotAPI {
   getPermissionRules(): Promise<{ kind: string; pathPrefix: string }[]>;
   removePermissionRule(index: number): Promise<void>;
   clearPermissionRules(): Promise<void>;
+  setYoloMode(enabled: boolean): Promise<void>;
+  getYoloMode(): Promise<boolean>;
 }
 
 interface StatsAPI {

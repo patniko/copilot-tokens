@@ -78,6 +78,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     permissions.clearRules();
   });
 
+  ipcMain.handle('copilot:setYoloMode', (_event, enabled: boolean) => {
+    permissions.yoloMode = enabled;
+  });
+
+  ipcMain.handle('copilot:getYoloMode', () => {
+    return permissions.yoloMode;
+  });
+
   ipcMain.handle('copilot:sendMessage', async (_event, prompt: string, attachments?: { path: string }[]) => {
     try {
       await copilot.sendMessage(prompt, (event) => {

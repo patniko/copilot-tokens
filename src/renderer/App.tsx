@@ -25,6 +25,9 @@ export default function App() {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const { activeMilestone, checkStats, dismissMilestone } = useMilestones();
 
+  // YOLO mode state
+  const [yoloMode, setYoloMode] = useState(false);
+
   // Session recording refs
   const latestStatsRef = useRef<DashboardStats | null>(null);
   const sessionStartRef = useRef<number | null>(null);
@@ -279,6 +282,22 @@ export default function App() {
                 </button>
               </>
             )}
+            <button
+              onClick={() => {
+                const next = !yoloMode;
+                setYoloMode(next);
+                window.copilotAPI?.setYoloMode(next);
+              }}
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-1 font-bold text-[10px] ${
+                yoloMode
+                  ? 'text-[var(--accent-gold)] bg-[var(--accent-gold)]/15'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]'
+              }`}
+              title={yoloMode ? 'YOLO mode ON — auto-approving read/write/shell under project' : 'Enable YOLO mode — skip permission prompts for project files'}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 0L0 14h9l-2 10L20 10h-9l2-10z"/></svg>
+              YOLO
+            </button>
             <button
               onClick={handleBrowseCwd}
               className="px-2 py-0.5 rounded text-[var(--text-secondary)] hover:text-[var(--accent-gold)] hover:bg-[var(--accent-gold)]/10 transition-colors cursor-pointer text-[10px]"

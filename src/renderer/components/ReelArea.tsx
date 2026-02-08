@@ -59,6 +59,8 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [intent, setIntent] = useState<string | null>(null);
   const [isWaiting, setIsWaiting] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastPromptRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -75,6 +77,8 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
       };
       setMessages((prev) => [...prev, msg]);
       setIsWaiting(true);
+      setIsGenerating(true);
+      setElapsedSec(0);
       onUserMessage?.(msg);
       currentAssistantIdRef.current = null;
     }

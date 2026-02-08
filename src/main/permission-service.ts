@@ -38,6 +38,11 @@ function extractPath(request: Record<string, unknown>): string | null {
 export type EvalResult = 'allow' | 'ask';
 
 export class PermissionService {
+  private _yoloMode = false;
+
+  get yoloMode(): boolean { return this._yoloMode; }
+  set yoloMode(v: boolean) { this._yoloMode = v; }
+
   /**
    * Evaluate whether a permission request should be auto-allowed or needs user approval.
    */
@@ -48,6 +53,12 @@ export class PermissionService {
     if (kind === 'url' || kind === 'mcp') return 'allow';
 
     const filePath = extractPath(request);
+
+    // YOLO mode: auto-approve read/write/shell under CWD
+    if (this._yoloMode && cwd) {
+      if (kind === 'shell') return 'allow';
+      if (filePath && isUnder(filePath, cwd)) return 'allow';
+    }
 
     // Read under CWD: always auto-approve
     if (kind === 'read') {

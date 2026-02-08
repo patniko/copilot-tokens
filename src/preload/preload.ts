@@ -40,6 +40,12 @@ contextBridge.exposeInMainWorld('copilotAPI', {
   clearPermissionRules(): Promise<void> {
     return ipcRenderer.invoke('copilot:clearPermissionRules');
   },
+  setYoloMode(enabled: boolean): Promise<void> {
+    return ipcRenderer.invoke('copilot:setYoloMode', enabled);
+  },
+  getYoloMode(): Promise<boolean> {
+    return ipcRenderer.invoke('copilot:getYoloMode');
+  },
 });
 
 contextBridge.exposeInMainWorld('statsAPI', {
