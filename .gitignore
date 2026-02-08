@@ -4,3 +4,4 @@ out/
 .vite/
 *.js.map
 capabilities-gap-report.html
+.DS_Store
