@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
+import { renderInline } from '../../lib/render-inline';
 
 interface BashTileProps {
   command: string;
@@ -47,7 +48,7 @@ export default function BashTile({ command, output, isRunning, progress, success
         className="font-mono text-sm mb-2 break-all"
         style={{ color: 'var(--accent-green)' }}
       >
-        $ {command}
+        $ {renderInline(command)}
       </div>
 
       {/* Progress */}

@@ -51,14 +51,21 @@ function toolTypeFromName(toolName: string): ToolCallMessage['toolType'] {
 // Tools that should be silently hidden (just update UI state, not shown as tiles)
 const HIDDEN_TOOLS = new Set(['report_intent', 'ask_user']);
 
+/** Fields to skip when picking a human-readable subtitle from tool args */
+const TITLE_SKIP = new Set(['path', 'file', 'command', 'cmd', 'completed', 'success', '_toolName']);
+
 function toolTitleFromArgs(toolName: string, toolType: ToolCallMessage['toolType'], args: Record<string, unknown>): string {
   if (toolType === 'bash') return String(args.command ?? toolName);
   if (toolType === 'file_edit') return String(args.path ?? toolName);
   if (toolType === 'file_read') return String(args.path ?? args.pattern ?? toolName);
   if (toolName === 'task') return `🤖 Sub-agent: ${String(args.description ?? toolName)}`;
-  // For generic tools, prefer a human-friendly description if available
-  const desc = args.description ?? args.subject ?? args.title ?? args.fact;
-  if (desc) return `${toolName}: ${String(desc)}`;
+  // Generic: pick the first short string value as a subtitle
+  for (const [k, v] of Object.entries(args)) {
+    if (TITLE_SKIP.has(k)) continue;
+    if (typeof v === 'string' && v.length > 0 && v.length <= 100) {
+      return `${toolName}: ${v}`;
+    }
+  }
   return toolName;
 }
 
@@ -313,7 +320,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissio
           transition={{ duration: 0.5 }}
           className="flex flex-col items-center gap-3"
         >
-          <img src="./logo-128.png" alt="GitHub Tokens" className="w-16 h-16 opacity-60" />
+          <img src="./logo-128.png" alt="Copilot Tokens" className="w-16 h-16 opacity-60" />
           <p className="text-lg font-medium text-[var(--text-primary)]">What would you like to build?</p>
           <p className="text-sm max-w-md text-center leading-relaxed">
             Describe a task, paste an error, or ask a question — your agent will get to work.

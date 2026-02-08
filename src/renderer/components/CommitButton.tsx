@@ -28,7 +28,7 @@ export default function CommitButton({ changedFiles, visible }: CommitButtonProp
             exit={{ scale: 0 }}
             transition={{ type: 'spring', stiffness: 400, damping: 20 }}
             onClick={() => setModalOpen(true)}
-            className="px-4 py-2 rounded-lg font-bold text-black cursor-pointer"
+            className="w-full py-2 rounded-lg font-bold text-black cursor-pointer"
             style={{
               backgroundColor: 'var(--accent-gold)',
               boxShadow: '0 0 15px rgba(251,191,36,0.5), 0 0 30px rgba(251,191,36,0.3)',

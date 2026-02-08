@@ -41,6 +41,9 @@ export default function App() {
   // YOLO mode state
   const [yoloMode, setYoloMode] = useState(false);
 
+  // Agent activity state (for logo bounce)
+  const [agentActive, setAgentActive] = useState(false);
+
   // Session recording refs
   const latestStatsRef = useRef<DashboardStats | null>(null);
   const sessionStartRef = useRef<number | null>(null);
@@ -92,6 +95,15 @@ export default function App() {
           window.cwdAPI.gitInfo(dir).then((info) => {
             setGitBranch(info.isRepo ? (info.branch ?? null) : null);
           });
+          // Seed changed files from existing git diff
+          window.cwdAPI.gitStats(dir).then((stats) => {
+            if (stats.files.length > 0) {
+              setChangedFiles((prev) => {
+                const merged = new Set([...prev, ...stats.files]);
+                return [...merged];
+              });
+            }
+          });
         }
       });
     }
@@ -109,6 +121,14 @@ export default function App() {
     if (window.cwdAPI) {
       window.cwdAPI.gitInfo(dir).then((info) => {
         setGitBranch(info.isRepo ? (info.branch ?? null) : null);
+      });
+      window.cwdAPI.gitStats(dir).then((stats) => {
+        if (stats.files.length > 0) {
+          setChangedFiles((prev) => {
+            const merged = new Set([...prev, ...stats.files]);
+            return [...merged];
+          });
+        }
       });
     }
   }, []);
@@ -165,6 +185,7 @@ export default function App() {
 
   const handleSend = useCallback((prompt: string) => {
     if (!sessionStartRef.current) sessionStartRef.current = Date.now();
+    setAgentActive(true);
     setUserPrompt(prompt);
     requestAnimationFrame(() => setUserPrompt(null));
   }, []);
@@ -175,6 +196,7 @@ export default function App() {
     const unsub = window.copilotAPI.onEvent((event: unknown) => {
       const ev = event as Record<string, unknown> | null;
       if (!ev || typeof ev !== 'object' || ev.type !== 'session.idle') return;
+      setAgentActive(false);
       const stats = latestStatsRef.current;
       const start = sessionStartRef.current;
       if (!stats || !start || stats.inputTokens === 0) return;
@@ -207,6 +229,21 @@ export default function App() {
 
       // Reset for next session segment
       sessionStartRef.current = null;
+
+      // Refresh git changed files after agent finishes
+      if (window.cwdAPI) {
+        window.cwdAPI.get().then((currentCwd) => {
+          if (!currentCwd) return;
+          window.cwdAPI.gitStats(currentCwd).then((gs) => {
+            if (gs.files.length > 0) {
+              setChangedFiles((prev) => {
+                const merged = new Set([...prev, ...gs.files]);
+                return [...merged];
+              });
+            }
+          });
+        });
+      }
     });
     return unsub;
   }, []);
@@ -217,9 +254,14 @@ export default function App() {
         {/* Title Bar */}
         <header className="flex items-center justify-center py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative">
           <div className="flex items-center gap-2">
-            <img src="./logo-128.png" alt="GitHub Tokens" className="w-7 h-7" />
-            <h1 className="text-2xl font-bold tracking-widest text-[var(--accent-gold)] neon-glow">
-              GITHUB TOKENS
+            <h1 className="text-2xl font-bold tracking-widest text-[var(--accent-gold)] neon-glow flex items-center gap-2">
+              COPILOT
+              <img
+                src="./logo-128.png"
+                alt="Copilot Tokens"
+                className={`w-7 h-7${agentActive ? ' logo-bounce' : ''}`}
+              />
+              TOKENS
             </h1>
           </div>
           <div className="absolute right-4 flex items-center gap-2">
@@ -382,10 +424,14 @@ export default function App() {
         {/* Main Content */}
         <main className="flex flex-1 overflow-hidden">
           {/* Token Dashboard (Left Panel) */}
-          <aside className="w-64 shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] p-4 flex flex-col gap-4 overflow-y-auto">
-            <h2 className="text-sm uppercase tracking-wider text-[var(--text-secondary)]">Token Dashboard</h2>
-            <TokenDashboard key={resetKey} inputTokenCount={inputTokens} contextWindow={availableModels.find(m => m.id === currentModel)?.contextWindow} onStatsUpdate={handleStatsUpdate} />
-            <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} />
+          <aside className="w-64 shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 flex flex-col gap-2 overflow-hidden">
+            <h2 className="text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">Token Dashboard</h2>
+            <div className="flex-1 min-h-0">
+              <TokenDashboard key={resetKey} inputTokenCount={inputTokens} contextWindow={availableModels.find(m => m.id === currentModel)?.contextWindow} onStatsUpdate={handleStatsUpdate} />
+            </div>
+            <div className="shrink-0">
+              <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} />
+            </div>
           </aside>
 
           {/* Reel / Conversation Area (Center) */}

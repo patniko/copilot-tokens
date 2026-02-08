@@ -139,12 +139,12 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
   const totalTokens = stats.inputTokens + stats.outputTokens;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2">
       {/* Token Counters */}
       <Section title="Tokens">
         <OdometerCounter label="INPUT" value={stats.inputTokens} size="sm" />
         <OdometerCounter label="OUTPUT" value={stats.outputTokens} size="sm" />
-        <OdometerCounter label="TOTAL" value={totalTokens} size="md" color="var(--accent-gold)" />
+        <OdometerCounter label="TOTAL" value={totalTokens} size="sm" color="var(--accent-gold)" />
       </Section>
 
       {/* Context Usage */}
@@ -153,18 +153,20 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
       </Section>
 
       {/* File Stats */}
-      <Section title="File Stats">
-        <OdometerCounter label="FILES CHANGED" value={gitStats.filesChanged} size="sm" />
-        <div className="flex gap-4">
-          <OdometerCounter label="LINES +" value={gitStats.linesAdded} size="sm" color="var(--accent-green)" />
-          <OdometerCounter label="LINES −" value={gitStats.linesRemoved} size="sm" color="var(--accent-red)" />
+      <Section title="Changes">
+        <div className="flex gap-4 items-end">
+          <OdometerCounter label="FILES" value={gitStats.filesChanged} size="sm" />
+          <OdometerCounter label="+" value={gitStats.linesAdded} size="sm" color="var(--accent-green)" />
+          <OdometerCounter label="−" value={gitStats.linesRemoved} size="sm" color="var(--accent-red)" />
         </div>
       </Section>
 
       {/* Session Info */}
       <Section title="Session">
-        <OdometerCounter label="MESSAGES" value={stats.messagesCount} size="sm" />
-        <OdometerCounter label="TOOL CALLS" value={stats.toolCalls} size="sm" />
+        <div className="flex gap-4 items-end">
+          <OdometerCounter label="MESSAGES" value={stats.messagesCount} size="sm" />
+          <OdometerCounter label="TOOLS" value={stats.toolCalls} size="sm" />
+        </div>
       </Section>
     </div>
   );
@@ -172,8 +174,8 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="glass-card p-3 flex flex-col gap-2">
-      <h3 className="text-[10px] uppercase tracking-widest text-[var(--text-secondary)] border-b border-[var(--border-color)] pb-1">
+    <div className="glass-card px-3 py-2 flex flex-col gap-1.5">
+      <h3 className="text-[9px] uppercase tracking-widest text-[var(--text-secondary)] border-b border-[var(--border-color)] pb-1">
         {title}
       </h3>
       {children}

@@ -1,6 +1,6 @@
 {
   "name": "github-tokens",
-  "productName": "GitHub Tokens",
+  "productName": "Copilot Tokens",
   "version": "1.0.0",
   "description": "Copilot Slots - GitHub Token Tracker",
   "main": ".vite/build/main.js",

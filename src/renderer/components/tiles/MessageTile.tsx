@@ -1,39 +1,9 @@
 import { type ReactNode } from 'react';
+import { renderInline } from '../../lib/render-inline';
 
 interface MessageTileProps {
   content: string;
   isStreaming: boolean;
-}
-
-function parseInlineCode(text: string): ReactNode[] {
-  const parts: ReactNode[] = [];
-  const regex = /`([^`]+)`/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > last) {
-      parts.push(text.slice(last, match.index));
-    }
-    parts.push(
-      <code
-        key={key++}
-        className="px-1.5 py-0.5 rounded text-sm"
-        style={{
-          backgroundColor: 'rgba(255,255,255,0.1)',
-          fontFamily: 'monospace',
-        }}
-      >
-        {match[1]}
-      </code>,
-    );
-    last = regex.lastIndex;
-  }
-  if (last < text.length) {
-    parts.push(text.slice(last));
-  }
-  return parts;
 }
 
 function renderContent(content: string): ReactNode[] {
@@ -46,7 +16,7 @@ function renderContent(content: string): ReactNode[] {
   while ((match = codeBlockRegex.exec(content)) !== null) {
     if (match.index > last) {
       blocks.push(
-        <span key={key++}>{parseInlineCode(content.slice(last, match.index))}</span>,
+        <span key={key++}>{renderInline(content.slice(last, match.index))}</span>,
       );
     }
     blocks.push(
@@ -67,7 +37,7 @@ function renderContent(content: string): ReactNode[] {
   }
   if (last < content.length) {
     blocks.push(
-      <span key={key++}>{parseInlineCode(content.slice(last))}</span>,
+      <span key={key++}>{renderInline(content.slice(last))}</span>,
     );
   }
   return blocks;

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { renderInline } from '../../lib/render-inline';
 
 interface GenericToolTileProps {
   title: string;
@@ -52,7 +53,7 @@ export default function GenericToolTile({ title, data, isRunning, success, error
           className="text-sm font-bold truncate"
           style={{ color: 'var(--text-primary)' }}
         >
-          {title}
+          {renderInline(title)}
         </span>
       </div>
 
@@ -67,7 +68,7 @@ export default function GenericToolTile({ title, data, isRunning, success, error
       {summary.length > 0 && !expanded && (
         <div className="text-xs font-mono mb-1 space-y-0.5" style={{ color: 'var(--text-secondary)' }}>
           {summary.slice(0, 3).map((line, i) => (
-            <div key={i} className="truncate">{line}</div>
+            <div key={i} className="truncate">{renderInline(line)}</div>
           ))}
           {summary.length > 3 && (
             <div className="text-[var(--text-secondary)] opacity-60">…and {summary.length - 3} more</div>
