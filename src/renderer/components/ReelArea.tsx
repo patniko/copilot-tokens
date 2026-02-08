@@ -14,7 +14,6 @@ import {
   FileReadTile,
   GenericToolTile,
   UserBubble,
-  IntentBadge,
 } from './tiles';
 
 interface ReelAreaProps {
@@ -251,6 +250,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
 
         case 'session.idle': {
           setIsWaiting(false);
+          setIsGenerating(false);
           setMessages((prev) =>
             prev.map((m) =>
               m.type === 'assistant' && m.isStreaming
@@ -267,6 +267,13 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
 
     return unsubscribe;
   }, [onUsage]);
+
+  // Elapsed time timer while generating
+  useEffect(() => {
+    if (!isGenerating) return;
+    const interval = setInterval(() => setElapsedSec(s => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isGenerating]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -301,84 +308,124 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden p-6 flex flex-col gap-4">
-      <IntentBadge intent={intent} />
-      <AnimatePresence initial={false}>
-        {messages.map((msg) => {
-          const xOffset = getRandomOffset(msg.id);
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden p-6 flex flex-col gap-4">
+        <AnimatePresence initial={false}>
+          {messages.map((msg) => {
+            const xOffset = getRandomOffset(msg.id);
 
-          return (
+            return (
+              <motion.div
+                key={msg.id}
+                initial={{ y: 100, opacity: 0, scale: 0.9, x: xOffset }}
+                animate={{ y: 0, opacity: 1, scale: 1, x: xOffset }}
+                transition={springTransition}
+                layout
+              >
+                {msg.type === 'user' && <UserBubble content={msg.content} />}
+                {msg.type === 'assistant' && (
+                  <MessageTile content={msg.content} isStreaming={msg.isStreaming} />
+                )}
+                {msg.type === 'tool_call' && msg.toolType === 'bash' && (
+                  <BashTile
+                    command={String(msg.data.command ?? msg.title)}
+                    output={msg.data.output ? String(msg.data.output) : undefined}
+                    isRunning={!msg.data.completed}
+                    progress={msg.data.progress ? String(msg.data.progress) : undefined}
+                    success={typeof msg.data.success === 'boolean' ? (msg.data.success as boolean) : undefined}
+                    error={msg.data.error ? String(msg.data.error) : undefined}
+                  />
+                )}
+                {msg.type === 'tool_call' && msg.toolType === 'file_edit' && (
+                  <FileEditTile
+                    path={String(msg.data.path ?? msg.title)}
+                    diff={msg.data.diff ? String(msg.data.diff) : undefined}
+                    isRunning={!msg.data.completed}
+                  />
+                )}
+                {msg.type === 'tool_call' && msg.toolType === 'file_read' && (
+                  <FileReadTile
+                    path={String(msg.data.path ?? msg.title)}
+                    content={msg.data.content ? String(msg.data.content) : undefined}
+                    isRunning={!msg.data.completed}
+                  />
+                )}
+                {msg.type === 'tool_call' && msg.toolType === 'generic' && (
+                  <GenericToolTile
+                    title={msg.title}
+                    data={msg.data}
+                    isRunning={!msg.data.completed}
+                    success={typeof msg.data.success === 'boolean' ? (msg.data.success as boolean) : undefined}
+                    error={msg.data.error ? String(msg.data.error) : undefined}
+                    progress={msg.data.progress ? String(msg.data.progress) : undefined}
+                  />
+                )}
+              </motion.div>
+            );
+          })}
+
+          {/* Thinking indicator — shown after user sends, before first event */}
+          {isWaiting && (
             <motion.div
-              key={msg.id}
-              initial={{ y: 100, opacity: 0, scale: 0.9, x: xOffset }}
-              animate={{ y: 0, opacity: 1, scale: 1, x: xOffset }}
-              transition={springTransition}
-              layout
+              key="thinking"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="flex items-center gap-3 px-4 py-3"
             >
-              {msg.type === 'user' && <UserBubble content={msg.content} />}
-              {msg.type === 'assistant' && (
-                <MessageTile content={msg.content} isStreaming={msg.isStreaming} />
-              )}
-              {msg.type === 'tool_call' && msg.toolType === 'bash' && (
-                <BashTile
-                  command={String(msg.data.command ?? msg.title)}
-                  output={msg.data.output ? String(msg.data.output) : undefined}
-                  isRunning={!msg.data.completed}
-                  progress={msg.data.progress ? String(msg.data.progress) : undefined}
-                  success={typeof msg.data.success === 'boolean' ? (msg.data.success as boolean) : undefined}
-                  error={msg.data.error ? String(msg.data.error) : undefined}
-                />
-              )}
-              {msg.type === 'tool_call' && msg.toolType === 'file_edit' && (
-                <FileEditTile
-                  path={String(msg.data.path ?? msg.title)}
-                  diff={msg.data.diff ? String(msg.data.diff) : undefined}
-                  isRunning={!msg.data.completed}
-                />
-              )}
-              {msg.type === 'tool_call' && msg.toolType === 'file_read' && (
-                <FileReadTile
-                  path={String(msg.data.path ?? msg.title)}
-                  content={msg.data.content ? String(msg.data.content) : undefined}
-                  isRunning={!msg.data.completed}
-                />
-              )}
-              {msg.type === 'tool_call' && msg.toolType === 'generic' && (
-                <GenericToolTile
-                  title={msg.title}
-                  data={msg.data}
-                  isRunning={!msg.data.completed}
-                  success={typeof msg.data.success === 'boolean' ? (msg.data.success as boolean) : undefined}
-                  error={msg.data.error ? String(msg.data.error) : undefined}
-                  progress={msg.data.progress ? String(msg.data.progress) : undefined}
-                />
-              )}
+              <div className="flex gap-1">
+                {[0, 1, 2].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: 'var(--accent-purple)' }}
+                    animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.1, 0.8] }}
+                    transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+                  />
+                ))}
+              </div>
+              <span className="text-sm text-[var(--text-secondary)] italic">Thinking…</span>
             </motion.div>
-          );
-        })}
+          )}
+        </AnimatePresence>
+      </div>
 
-        {/* Thinking indicator — shown after user sends, before agent responds */}
-        {isWaiting && (
+      {/* Sticky activity bar — always visible at bottom during generation */}
+      <AnimatePresence>
+        {isGenerating && !isWaiting && (
           <motion.div
-            key="thinking"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="flex items-center gap-3 px-4 py-3"
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 40, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="shrink-0 flex items-center gap-3 px-4 py-2 border-t border-[var(--border-color)] bg-[var(--bg-secondary)]"
           >
-            <div className="flex gap-1">
-              {[0, 1, 2].map((i) => (
-                <motion.div
-                  key={i}
-                  className="w-2 h-2 rounded-full"
-                  style={{ background: 'var(--accent-purple)' }}
-                  animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.1, 0.8] }}
-                  transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
-                />
-              ))}
+            {/* Animated progress bar */}
+            <div className="relative w-5 h-5 shrink-0">
+              <motion.div
+                className="absolute inset-0 rounded-full border-2 border-transparent"
+                style={{ borderTopColor: 'var(--accent-purple)', borderRightColor: 'var(--accent-blue)' }}
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              />
             </div>
-            <span className="text-sm text-[var(--text-secondary)] italic">Thinking…</span>
+
+            {/* Intent or status */}
+            <div className="flex-1 min-w-0">
+              {intent ? (
+                <span className="text-xs font-medium text-[var(--accent-purple)] truncate block">
+                  {intent}
+                </span>
+              ) : (
+                <span className="text-xs text-[var(--text-secondary)] italic">Agent is working…</span>
+              )}
+            </div>
+
+            {/* Elapsed time */}
+            <span className="text-[10px] tabular-nums text-[var(--text-secondary)] shrink-0">
+              {Math.floor(elapsedSec / 60)}:{String(elapsedSec % 60).padStart(2, '0')}
+            </span>
           </motion.div>
         )}
       </AnimatePresence>
