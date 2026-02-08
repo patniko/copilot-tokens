@@ -8,6 +8,7 @@ import { VitePlugin } from '@electron-forge/plugin-vite';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    icon: './logo-128',
   },
   rebuildConfig: {},
   makers: [

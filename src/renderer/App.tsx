@@ -88,9 +88,12 @@ export default function App() {
       <div className="flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono">
         {/* Title Bar */}
         <header className="flex items-center justify-center py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative">
-          <h1 className="text-2xl font-bold tracking-widest text-[var(--accent-gold)] neon-glow">
-            🎰 COPILOT SLOTS
-          </h1>
+          <div className="flex items-center gap-2">
+            <img src="./logo-128.png" alt="GitHub Tokens" className="w-7 h-7" />
+            <h1 className="text-2xl font-bold tracking-widest text-[var(--accent-gold)] neon-glow">
+              GITHUB TOKENS
+            </h1>
+          </div>
           <div className="absolute right-4 flex items-center gap-2">
             <button
               onClick={() => { setSettingsOpen(true); setLeaderboardOpen(false); }}

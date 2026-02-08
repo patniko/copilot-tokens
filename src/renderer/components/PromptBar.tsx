@@ -263,10 +263,10 @@ export default function PromptBar({ onSend, onGeneratingChange }: PromptBarProps
                   : undefined
               }
               whileTap={canSend ? { y: 4 } : undefined}
-              className="px-4 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-lg text-sm whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="px-3 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center"
               style={{ willChange: 'transform' }}
             >
-              🎰 PULL
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </motion.button>
           )}
         </AnimatePresence>
