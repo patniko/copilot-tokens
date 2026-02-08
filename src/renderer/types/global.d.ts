@@ -33,6 +33,11 @@ interface UtilAPI {
   openCopilotShell(dir: string): void;
 }
 
+interface ModelAPI {
+  get(): Promise<string>;
+  set(model: string): Promise<void>;
+}
+
 declare global {
   interface Window {
     copilotAPI: CopilotAPI;
@@ -40,6 +45,7 @@ declare global {
     gitAPI: GitAPI;
     cwdAPI: CwdAPI;
     utilAPI: UtilAPI;
+    modelAPI: ModelAPI;
   }
 }
 

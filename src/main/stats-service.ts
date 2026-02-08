@@ -37,6 +37,7 @@ interface StoreSchema {
   fastestResponse: number;
   recentCwds: string[];
   currentCwd: string;
+  currentModel: string;
 }
 
 const store = new Store<StoreSchema>({
@@ -50,6 +51,7 @@ const store = new Store<StoreSchema>({
     fastestResponse: Infinity,
     recentCwds: [],
     currentCwd: '',
+    currentModel: 'claude-sonnet-4',
   },
 });
 
@@ -141,5 +143,13 @@ export class StatsService {
 
   getRecentCwds(): string[] {
     return store.get('recentCwds');
+  }
+
+  getModel(): string {
+    return store.get('currentModel');
+  }
+
+  setModel(model: string): void {
+    store.set('currentModel', model);
   }
 }

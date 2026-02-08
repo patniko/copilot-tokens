@@ -8,6 +8,7 @@ interface SettingsProps {
   isOpen: boolean;
   onClose: () => void;
   onCwdChange?: (dir: string) => void;
+  onModelChange?: (model: string) => void;
 }
 
 const themeEmojis: Record<Theme['name'], string> = {
@@ -16,10 +17,10 @@ const themeEmojis: Record<Theme['name'], string> = {
   minimal: '✨',
 };
 
-export default function Settings({ isOpen, onClose, onCwdChange }: SettingsProps) {
+export default function Settings({ isOpen, onClose, onCwdChange, onModelChange }: SettingsProps) {
   const { theme, setTheme, themes } = useTheme();
   const { play, enabled, setEnabled, volume, setVolume } = useSound();
-  const [model, setModel] = useState('gpt-4o');
+  const [model, setModel] = useState('claude-sonnet-4');
   const [cwd, setCwd] = useState('');
   const [recentCwds, setRecentCwds] = useState<string[]>([]);
 
@@ -27,6 +28,9 @@ export default function Settings({ isOpen, onClose, onCwdChange }: SettingsProps
     if (isOpen && window.cwdAPI) {
       window.cwdAPI.get().then(setCwd);
       window.cwdAPI.getRecent().then(setRecentCwds);
+    }
+    if (isOpen && window.modelAPI) {
+      window.modelAPI.get().then(setModel);
     }
   }, [isOpen]);
 
@@ -182,22 +186,42 @@ export default function Settings({ isOpen, onClose, onCwdChange }: SettingsProps
                 </div>
               </section>
 
-              {/* AI Model (stub) */}
+              {/* AI Model */}
               <section>
                 <label className="block text-sm uppercase tracking-wider text-[var(--text-secondary)] mb-3">
-                  AI Model{' '}
-                  <span className="normal-case text-xs opacity-60">(Coming soon)</span>
+                  AI Model
                 </label>
                 <select
                   value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  disabled
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm opacity-50 cursor-not-allowed appearance-none"
+                  onChange={(e) => {
+                    const m = e.target.value;
+                    setModel(m);
+                    window.modelAPI?.set(m);
+                    onModelChange?.(m);
+                  }}
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm cursor-pointer"
                 >
-                  <option value="gpt-4o">GPT-4o</option>
-                  <option value="claude-sonnet">Claude Sonnet</option>
-                  <option value="custom">Custom</option>
+                  <optgroup label="Claude">
+                    <option value="claude-sonnet-4">Claude Sonnet 4</option>
+                    <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
+                    <option value="claude-haiku-4.5">Claude Haiku 4.5</option>
+                    <option value="claude-opus-4">Claude Opus 4</option>
+                  </optgroup>
+                  <optgroup label="GPT">
+                    <option value="gpt-4.1">GPT-4.1</option>
+                    <option value="gpt-4.1-mini">GPT-4.1 Mini</option>
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  </optgroup>
+                  <optgroup label="Other">
+                    <option value="o3">o3</option>
+                    <option value="o4-mini">o4-mini</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                  </optgroup>
                 </select>
+                <p className="mt-1.5 text-[10px] text-[var(--text-secondary)]">
+                  Changes take effect on next message
+                </p>
               </section>
 
               {/* Working Directory */}

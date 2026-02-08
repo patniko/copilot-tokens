@@ -54,6 +54,15 @@ contextBridge.exposeInMainWorld('utilAPI', {
   },
 });
 
+contextBridge.exposeInMainWorld('modelAPI', {
+  get(): Promise<string> {
+    return ipcRenderer.invoke('model:get');
+  },
+  set(model: string): Promise<void> {
+    return ipcRenderer.invoke('model:set', model);
+  },
+});
+
 contextBridge.exposeInMainWorld('cwdAPI', {
   get(): Promise<string> {
     return ipcRenderer.invoke('cwd:get');

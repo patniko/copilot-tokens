@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ThemeProvider } from './lib/themes';
 import PromptBar from './components/PromptBar';
 import TokenDashboard from './components/TokenDashboard';
@@ -18,19 +18,28 @@ export default function App() {
   const [inputTokens, setInputTokens] = useState(0);
   const [cwd, setCwd] = useState('');
   const [gitBranch, setGitBranch] = useState<string | null>(null);
+  const [currentModel, setCurrentModel] = useState('claude-sonnet-4');
   const { activeMilestone, checkStats, dismissMilestone } = useMilestones();
 
-  // Load CWD + git info on mount
+  // Session recording refs
+  const latestStatsRef = useRef<DashboardStats | null>(null);
+  const sessionStartRef = useRef<number | null>(null);
+
+  // Load CWD + git info + model on mount
   useEffect(() => {
-    if (!window.cwdAPI) return;
-    window.cwdAPI.get().then((dir) => {
-      if (dir) {
-        setCwd(dir);
-        window.cwdAPI.gitInfo(dir).then((info) => {
-          setGitBranch(info.isRepo ? (info.branch ?? null) : null);
-        });
-      }
-    });
+    if (window.cwdAPI) {
+      window.cwdAPI.get().then((dir) => {
+        if (dir) {
+          setCwd(dir);
+          window.cwdAPI.gitInfo(dir).then((info) => {
+            setGitBranch(info.isRepo ? (info.branch ?? null) : null);
+          });
+        }
+      });
+    }
+    if (window.modelAPI) {
+      window.modelAPI.get().then(setCurrentModel);
+    }
   }, []);
 
   const refreshGitInfo = useCallback((dir: string) => {
@@ -49,7 +58,10 @@ export default function App() {
   }, [refreshGitInfo]);
 
   const handleStatsUpdate = useCallback(
-    (stats: DashboardStats) => { checkStats(stats); },
+    (stats: DashboardStats) => {
+      latestStatsRef.current = stats;
+      checkStats(stats);
+    },
     [checkStats],
   );
 
@@ -79,8 +91,35 @@ export default function App() {
   }, []);
 
   const handleSend = useCallback((prompt: string) => {
+    if (!sessionStartRef.current) sessionStartRef.current = Date.now();
     setUserPrompt(prompt);
     requestAnimationFrame(() => setUserPrompt(null));
+  }, []);
+
+  // Record session to leaderboard when agent goes idle
+  useEffect(() => {
+    if (!window.copilotAPI?.onEvent) return;
+    const unsub = window.copilotAPI.onEvent((event: unknown) => {
+      const ev = event as Record<string, unknown> | null;
+      if (!ev || typeof ev !== 'object' || ev.type !== 'session.idle') return;
+      const stats = latestStatsRef.current;
+      const start = sessionStartRef.current;
+      if (!stats || !start || stats.inputTokens === 0) return;
+      const durationMs = Date.now() - start;
+      window.statsAPI?.recordSession({
+        inputTokens: stats.inputTokens,
+        outputTokens: stats.outputTokens,
+        messagesCount: stats.messagesCount,
+        filesChanged: stats.filesChanged,
+        linesAdded: stats.linesAdded,
+        linesRemoved: stats.linesRemoved,
+        toolCalls: stats.toolCalls,
+        durationMs,
+      });
+      // Reset for next session segment
+      sessionStartRef.current = null;
+    });
+    return unsub;
   }, []);
 
   return (
@@ -131,6 +170,10 @@ export default function App() {
               </span>
             </>
           )}
+          <span className="text-[var(--border-color)]">|</span>
+          <span className="text-[var(--accent-purple)] flex items-center gap-1">
+            🧠 {currentModel}
+          </span>
           <div className="ml-auto flex items-center gap-1">
             {cwd && (
               <>
@@ -179,7 +222,7 @@ export default function App() {
           </section>
         </main>
         <Leaderboard isOpen={leaderboardOpen} onClose={() => setLeaderboardOpen(false)} />
-        <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onCwdChange={refreshGitInfo} />
+        <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onCwdChange={refreshGitInfo} onModelChange={setCurrentModel} />
         <MilestoneOverlay milestone={activeMilestone} onComplete={dismissMilestone} />
       </div>
     </ThemeProvider>

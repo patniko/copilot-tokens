@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import OdometerCounter from './OdometerCounter';
+import ContextProgressBar from './ContextProgressBar';
 
 export interface DashboardStats {
   inputTokens: number;
@@ -121,6 +122,11 @@ export default function TokenDashboard({ inputTokenCount, onStatsUpdate }: Token
         <OdometerCounter label="INPUT" value={stats.inputTokens} size="sm" />
         <OdometerCounter label="OUTPUT" value={stats.outputTokens} size="sm" />
         <OdometerCounter label="TOTAL" value={totalTokens} size="md" color="var(--accent-gold)" />
+      </Section>
+
+      {/* Context Usage */}
+      <Section title="Context Window">
+        <ContextProgressBar usedTokens={stats.inputTokens} />
       </Section>
 
       {/* File Stats */}

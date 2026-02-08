@@ -31,6 +31,7 @@ export class CopilotService {
   private started = false;
 
   private workingDirectory: string | undefined;
+  private model: string = 'claude-sonnet-4';
 
   private constructor() {}
 
@@ -44,12 +45,25 @@ export class CopilotService {
   setWorkingDirectory(dir: string): void {
     if (dir && dir !== this.workingDirectory) {
       this.workingDirectory = dir;
-      // Destroy current session so next message creates one with the new CWD
       if (this.session) {
         this.session.destroy().catch(() => {});
         this.session = null;
       }
     }
+  }
+
+  setModel(model: string): void {
+    if (model && model !== this.model) {
+      this.model = model;
+      if (this.session) {
+        this.session.destroy().catch(() => {});
+        this.session = null;
+      }
+    }
+  }
+
+  getModel(): string {
+    return this.model;
   }
 
   async ensureStarted(): Promise<void> {
@@ -65,7 +79,7 @@ export class CopilotService {
     await this.ensureStarted();
     if (!this.session) {
       const opts: Record<string, unknown> = {
-        model: 'gpt-4.1',
+        model: this.model,
         streaming: true,
       };
       if (this.workingDirectory) {

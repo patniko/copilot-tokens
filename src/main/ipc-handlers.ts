@@ -27,10 +27,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   const copilot = CopilotService.getInstance();
   const stats = new StatsService();
 
-  // Set initial CWD from persisted store
+  // Set initial CWD and model from persisted store
   const savedCwd = stats.getCwd();
   if (savedCwd) {
     copilot.setWorkingDirectory(savedCwd);
+  }
+  const savedModel = stats.getModel();
+  if (savedModel) {
+    copilot.setModel(savedModel);
   }
 
   ipcMain.handle('copilot:sendMessage', async (_event, prompt: string, attachments?: { path: string }[]) => {
@@ -150,8 +154,16 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('util:openCopilotShell', (_event, dir: string) => {
     if (!dir) return;
-    // Open Terminal.app with copilot running in the specified directory
     const script = `tell application "Terminal" to do script "cd ${dir.replace(/"/g, '\\"')} && copilot"`;
     execFile('osascript', ['-e', script]);
+  });
+
+  ipcMain.handle('model:get', () => {
+    return stats.getModel();
+  });
+
+  ipcMain.handle('model:set', (_event, model: string) => {
+    stats.setModel(model);
+    copilot.setModel(model);
   });
 }
