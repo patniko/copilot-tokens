@@ -84,6 +84,11 @@ interface PackAPI {
   deleteThemePack(id: string): Promise<void>;
 }
 
+interface SettingsAPI {
+  getSystemPrompt(): Promise<{ mode: 'append' | 'replace'; content: string }>;
+  setSystemPrompt(config: { mode: 'append' | 'replace'; content: string }): Promise<void>;
+}
+
 interface AuthAPI {
   getCliUser(): Promise<GitHubUser | null>;
   getOAuthUser(): Promise<GitHubUser | null>;
@@ -104,6 +109,7 @@ declare global {
     modelAPI: ModelAPI;
     mcpAPI: McpAPI;
     packAPI: PackAPI;
+    settingsAPI: SettingsAPI;
     authAPI: AuthAPI;
   }
 }

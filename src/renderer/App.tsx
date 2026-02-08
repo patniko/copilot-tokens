@@ -3,17 +3,17 @@ import logoImg from '../../logo-128.png';
 import { ThemeProvider } from './lib/themes';
 import TokenDashboard from './components/TokenDashboard';
 import type { DashboardStats } from './components/TokenDashboard';
-import Leaderboard from './components/Leaderboard';
 import Settings from './components/Settings';
 import SplitLayout from './components/SplitLayout';
 import CommitButton from './components/CommitButton';
 import MilestoneOverlay from './components/MilestoneOverlay';
 import AvatarMenu from './components/AvatarMenu';
 import PackStudio from './components/PackStudio';
-import TrophyCase from './components/TrophyCase';
+import AchievementsModal from './components/AchievementsModal';
 import SessionReplay from './components/SessionReplay';
 import SessionBrowser from './components/SessionBrowser';
 import LevelBadge from './components/LevelBadge';
+import CwdDropdown from './components/CwdDropdown';
 import LevelUpOverlay from './components/LevelUpOverlay';
 import { useSessionRecorder } from './hooks/useSessionRecorder';
 import { useBadges } from './hooks/useBadges';
@@ -24,10 +24,10 @@ import type { PermissionRequestData, PermissionDecision } from './components/Per
 import { useMilestones } from './hooks/useMilestones';
 
 export default function App() {
-  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [packStudioOpen, setPackStudioOpen] = useState(false);
-  const [trophyCaseOpen, setTrophyCaseOpen] = useState(false);
+  const [achievementsOpen, setAchievementsOpen] = useState(false);
+  const [achievementsTab, setAchievementsTab] = useState<'stats' | 'trophies'>('stats');
   const [replaySessionTimestamp, setReplaySessionTimestamp] = useState<number | null>(null);
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState<number | null>(null);
@@ -381,8 +381,8 @@ export default function App() {
           <div className="absolute left-20 flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <LevelBadge
               compact
-              onOpenLeaderboard={() => { setLeaderboardOpen(true); setSettingsOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
-              onOpenTrophyCase={() => { setTrophyCaseOpen(true); setSettingsOpen(false); setLeaderboardOpen(false); setPackStudioOpen(false); }}
+              onOpenLeaderboard={() => { setAchievementsTab('stats'); setAchievementsOpen(true); }}
+              onOpenTrophyCase={() => { setAchievementsTab('trophies'); setAchievementsOpen(true); }}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -403,23 +403,12 @@ export default function App() {
 
         {/* CWD Status Bar */}
         <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-color)] bg-[var(--bg-primary)] text-xs">
-          <span className={!cwd ? 'text-red-500' : 'text-[var(--text-secondary)]'}>{!cwd ? '⚠️' : '📂'}</span>
-          <button
-            onClick={handleBrowseCwd}
-            className="font-mono text-[var(--text-primary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer truncate max-w-[600px]"
-            title={cwd || 'Click to set working directory'}
-          >
-            {cwd || '(no working directory set — click to choose)'}
-          </button>
-          {gitBranch && (
-            <>
-              <span className="text-[var(--border-color)]">|</span>
-              <span className="text-[var(--accent-green)] flex items-center gap-1">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.5 2.5 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
-                {gitBranch}
-              </span>
-            </>
-          )}
+          <CwdDropdown
+            cwd={cwd}
+            gitBranch={gitBranch}
+            onBrowse={handleBrowseCwd}
+            onSelectRecent={(dir) => refreshGitInfo(dir)}
+          />
           <span className="text-[var(--border-color)]">|</span>
           <div className="relative">
             <button
@@ -587,10 +576,9 @@ export default function App() {
             </div>
             <div className="shrink-0">
               <AvatarMenu
-                onOpenSettings={() => { setSettingsOpen(true); setLeaderboardOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
-                onOpenLeaderboard={() => { setLeaderboardOpen(true); setSettingsOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
-                onOpenPackStudio={() => { setPackStudioOpen(true); setSettingsOpen(false); setLeaderboardOpen(false); setTrophyCaseOpen(false); }}
-                onOpenTrophyCase={() => { setTrophyCaseOpen(true); setSettingsOpen(false); setLeaderboardOpen(false); setPackStudioOpen(false); }}
+                onOpenSettings={() => { setSettingsOpen(true); setPackStudioOpen(false); }}
+                onOpenAchievements={(tab) => { setAchievementsTab(tab); setAchievementsOpen(true); }}
+                onOpenPackStudio={() => { setPackStudioOpen(true); setSettingsOpen(false); }}
               />
             </div>
           </aside>
@@ -636,10 +624,9 @@ export default function App() {
             )}
           </section>
         </main>
-        <Leaderboard isOpen={leaderboardOpen} onClose={() => setLeaderboardOpen(false)} onReplaySession={(ts) => { setLeaderboardOpen(false); setReplaySessionTimestamp(ts); }} />
-        <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onCwdChange={refreshGitInfo} onModelChange={setCurrentModel} />
+        <AchievementsModal isOpen={achievementsOpen} onClose={() => setAchievementsOpen(false)} onReplaySession={(ts) => { setAchievementsOpen(false); setReplaySessionTimestamp(ts); }} initialTab={achievementsTab} />
+        <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onModelChange={setCurrentModel} />
         <PackStudio isOpen={packStudioOpen} onClose={() => setPackStudioOpen(false)} />
-        <TrophyCase isOpen={trophyCaseOpen} onClose={() => setTrophyCaseOpen(false)} />
         <SessionReplay sessionTimestamp={replaySessionTimestamp} onClose={() => setReplaySessionTimestamp(null)} />
         <MilestoneOverlay milestone={activeMilestone} onComplete={dismissMilestone} />
         <LevelUpOverlay level={levelUpLevel} onComplete={() => setLevelUpLevel(null)} />

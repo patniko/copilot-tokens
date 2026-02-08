@@ -154,6 +154,15 @@ contextBridge.exposeInMainWorld('modelAPI', {
   },
 });
 
+contextBridge.exposeInMainWorld('settingsAPI', {
+  getSystemPrompt(): Promise<{ mode: 'append' | 'replace'; content: string }> {
+    return ipcRenderer.invoke('settings:getSystemPrompt');
+  },
+  setSystemPrompt(config: { mode: 'append' | 'replace'; content: string }): Promise<void> {
+    return ipcRenderer.invoke('settings:setSystemPrompt', config);
+  },
+});
+
 contextBridge.exposeInMainWorld('authAPI', {
   getCliUser(): Promise<unknown> {
     return ipcRenderer.invoke('auth:getCliUser');

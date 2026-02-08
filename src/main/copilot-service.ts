@@ -3,6 +3,7 @@ import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { app } from 'electron';
 import { execSync } from 'child_process';
+import Store from 'electron-store';
 
 // Dynamic import to load ESM SDK in Electron's CJS main process
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -109,6 +110,22 @@ export function loadMCPServers(): Record<string, MCPServerConfig> {
   return servers;
 }
 
+export interface SystemPromptConfig {
+  mode: 'append' | 'replace';
+  content: string;
+}
+
+interface SettingsStoreSchema {
+  systemPrompt: SystemPromptConfig;
+}
+
+const settingsStore = new Store<SettingsStoreSchema>({
+  name: 'settings',
+  defaults: {
+    systemPrompt: { mode: 'append', content: '' },
+  },
+});
+
 export class CopilotService {
   private static instance: CopilotService;
   private client: CopilotClientType | null = null;
@@ -160,6 +177,19 @@ export class CopilotService {
     this.permissionCallback = handler;
   }
 
+  getSystemPrompt(): SystemPromptConfig {
+    return settingsStore.get('systemPrompt');
+  }
+
+  setSystemPrompt(config: SystemPromptConfig): void {
+    settingsStore.set('systemPrompt', config);
+    // Destroy all sessions so the new prompt takes effect
+    for (const [id, session] of this.sessions) {
+      session.destroy().catch(() => {});
+      this.sessions.delete(id);
+    }
+  }
+
   async listModels(): Promise<{ id: string; name: string; contextWindow: number }[]> {
     await this.ensureStarted();
     const models = await this.client!.listModels();
@@ -208,6 +238,14 @@ export class CopilotService {
       };
       if (this.workingDirectory) {
         opts.workingDirectory = this.workingDirectory;
+      }
+      // Apply custom system prompt if configured
+      const promptConfig = this.getSystemPrompt();
+      if (promptConfig.content.trim()) {
+        opts.systemMessage = {
+          mode: promptConfig.mode,
+          content: promptConfig.content,
+        };
       }
       if (this.permissionCallback) {
         const cb = this.permissionCallback;

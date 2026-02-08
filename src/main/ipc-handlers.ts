@@ -343,6 +343,16 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return copilot.refreshModels();
   });
 
+  // ── Settings ──
+
+  ipcMain.handle('settings:getSystemPrompt', () => {
+    return copilot.getSystemPrompt();
+  });
+
+  ipcMain.handle('settings:setSystemPrompt', (_event, config: { mode: 'append' | 'replace'; content: string }) => {
+    copilot.setSystemPrompt(config);
+  });
+
   // ── Auth ──
 
   ipcMain.handle('auth:getCliUser', async () => {

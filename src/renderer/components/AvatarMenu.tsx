@@ -3,12 +3,11 @@ import type { GitHubUser, AuthSource } from '../../main/auth-service';
 
 interface AvatarMenuProps {
   onOpenSettings: () => void;
-  onOpenLeaderboard: () => void;
+  onOpenAchievements: (tab: 'stats' | 'trophies') => void;
   onOpenPackStudio: () => void;
-  onOpenTrophyCase: () => void;
 }
 
-export default function AvatarMenu({ onOpenSettings, onOpenLeaderboard, onOpenPackStudio, onOpenTrophyCase }: AvatarMenuProps) {
+export default function AvatarMenu({ onOpenSettings, onOpenAchievements, onOpenPackStudio }: AvatarMenuProps) {
   const [open, setOpen] = useState(false);
   const [cliUser, setCliUser] = useState<GitHubUser | null>(null);
   const [oauthUser, setOauthUser] = useState<GitHubUser | null>(null);
@@ -177,16 +176,10 @@ export default function AvatarMenu({ onOpenSettings, onOpenLeaderboard, onOpenPa
               <span>⚙️</span> Settings
             </button>
             <button
-              onClick={() => { setOpen(false); onOpenLeaderboard(); }}
+              onClick={() => { setOpen(false); onOpenAchievements('stats'); }}
               className="w-full px-4 py-2.5 text-left text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
             >
-              <span>🏆</span> Leaderboard
-            </button>
-            <button
-              onClick={() => { setOpen(false); onOpenTrophyCase(); }}
-              className="w-full px-4 py-2.5 text-left text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
-            >
-              <span>🏅</span> Trophy Case
+              <span>🏆</span> Achievements
             </button>
           </div>
         </>
