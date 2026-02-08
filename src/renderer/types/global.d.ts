@@ -24,6 +24,7 @@ interface CwdAPI {
   getRecent(): Promise<string[]>;
   browse(): Promise<string | null>;
   gitInfo(dir: string): Promise<{ isRepo: boolean; branch?: string }>;
+  gitStats(dir: string): Promise<{ filesChanged: number; linesAdded: number; linesRemoved: number; files: string[] }>;
 }
 
 interface UtilAPI {

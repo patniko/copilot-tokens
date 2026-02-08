@@ -70,4 +70,7 @@ contextBridge.exposeInMainWorld('cwdAPI', {
   gitInfo(dir: string): Promise<{ isRepo: boolean; branch?: string }> {
     return ipcRenderer.invoke('cwd:gitInfo', dir);
   },
+  gitStats(dir: string): Promise<{ filesChanged: number; linesAdded: number; linesRemoved: number; files: string[] }> {
+    return ipcRenderer.invoke('cwd:gitStats', dir);
+  },
 });

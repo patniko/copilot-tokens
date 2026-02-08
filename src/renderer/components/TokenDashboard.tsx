@@ -28,6 +28,7 @@ const initialStats: DashboardStats = {
 
 export default function TokenDashboard({ inputTokenCount, onStatsUpdate }: TokenDashboardProps) {
   const [stats, setStats] = useState<DashboardStats>(initialStats);
+  const [gitStats, setGitStats] = useState({ filesChanged: 0, linesAdded: 0, linesRemoved: 0 });
   const statsRef = useRef(stats);
 
   // Keep ref in sync for event callbacks
@@ -35,10 +36,10 @@ export default function TokenDashboard({ inputTokenCount, onStatsUpdate }: Token
     statsRef.current = stats;
   }, [stats]);
 
-  // Report stats upstream
+  // Report stats upstream (merge token stats + git stats)
   useEffect(() => {
-    onStatsUpdate?.(stats);
-  }, [stats, onStatsUpdate]);
+    onStatsUpdate?.({ ...stats, filesChanged: gitStats.filesChanged, linesAdded: gitStats.linesAdded, linesRemoved: gitStats.linesRemoved });
+  }, [stats, gitStats, onStatsUpdate]);
 
   // Sync inputTokenCount prop
   useEffect(() => {
@@ -46,6 +47,20 @@ export default function TokenDashboard({ inputTokenCount, onStatsUpdate }: Token
       setStats((prev) => ({ ...prev, inputTokens: inputTokenCount }));
     }
   }, [inputTokenCount]);
+
+  // Poll real git stats every 3 seconds
+  useEffect(() => {
+    const poll = async () => {
+      if (!window.cwdAPI) return;
+      const cwd = await window.cwdAPI.get();
+      if (!cwd) return;
+      const gs = await window.cwdAPI.gitStats(cwd);
+      setGitStats({ filesChanged: gs.filesChanged, linesAdded: gs.linesAdded, linesRemoved: gs.linesRemoved });
+    };
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleEvent = useCallback((event: unknown) => {
     const ev = event as Record<string, unknown> | null;
@@ -66,28 +81,23 @@ export default function TokenDashboard({ inputTokenCount, onStatsUpdate }: Token
         const input = (ev.inputTokens ?? 0) as number;
         const output = (ev.outputTokens ?? 0) as number;
         next.inputTokens += input;
-        // Prefer real output token count over our estimate when available
         if (output > 0) next.outputTokens = output;
       }
 
       if (type === 'tool.start') {
         next.toolCalls += 1;
-        const toolName = (ev.toolName ?? '') as string;
-        if (toolName === 'edit' || toolName === 'create' || toolName === 'write') {
-          next.filesChanged += 1;
-        }
       }
 
-      if (type === 'tool.complete') {
-        const toolCallId = (ev.toolCallId ?? '') as string;
-        const result = (ev.result ?? '') as string;
-        // Try to detect file edits from result diffs
-        if (result && toolCallId) {
-          const lines = result.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('+') && !line.startsWith('+++')) next.linesAdded += 1;
-            if (line.startsWith('-') && !line.startsWith('---')) next.linesRemoved += 1;
-          }
+      // Trigger a git stats refresh after tool completions
+      if (type === 'tool.complete' || type === 'session.idle') {
+        if (window.cwdAPI) {
+          window.cwdAPI.get().then((cwd) => {
+            if (cwd) {
+              window.cwdAPI.gitStats(cwd).then((gs) => {
+                setGitStats({ filesChanged: gs.filesChanged, linesAdded: gs.linesAdded, linesRemoved: gs.linesRemoved });
+              });
+            }
+          });
         }
       }
 
@@ -115,10 +125,10 @@ export default function TokenDashboard({ inputTokenCount, onStatsUpdate }: Token
 
       {/* File Stats */}
       <Section title="File Stats">
-        <OdometerCounter label="FILES CHANGED" value={stats.filesChanged} size="sm" />
+        <OdometerCounter label="FILES CHANGED" value={gitStats.filesChanged} size="sm" />
         <div className="flex gap-4">
-          <OdometerCounter label="LINES +" value={stats.linesAdded} size="sm" color="var(--accent-green)" />
-          <OdometerCounter label="LINES −" value={stats.linesRemoved} size="sm" color="var(--accent-red)" />
+          <OdometerCounter label="LINES +" value={gitStats.linesAdded} size="sm" color="var(--accent-green)" />
+          <OdometerCounter label="LINES −" value={gitStats.linesRemoved} size="sm" color="var(--accent-red)" />
         </div>
       </Section>
 

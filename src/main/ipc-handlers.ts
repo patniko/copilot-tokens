@@ -5,6 +5,24 @@ import { join } from 'node:path';
 import { CopilotService } from './copilot-service';
 import { StatsService, SessionStats } from './stats-service';
 
+function parseNumstat(stdout: string): { filesChanged: number; linesAdded: number; linesRemoved: number; files: string[] } {
+  const lines = stdout.trim().split('\n').filter(Boolean);
+  let linesAdded = 0;
+  let linesRemoved = 0;
+  const files: string[] = [];
+  for (const line of lines) {
+    const parts = line.split('\t');
+    if (parts.length >= 3) {
+      const added = parseInt(parts[0], 10);
+      const removed = parseInt(parts[1], 10);
+      if (!isNaN(added)) linesAdded += added;
+      if (!isNaN(removed)) linesRemoved += removed;
+      files.push(parts[2]);
+    }
+  }
+  return { filesChanged: files.length, linesAdded, linesRemoved, files };
+}
+
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   const copilot = CopilotService.getInstance();
   const stats = new StatsService();
@@ -92,6 +110,27 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         } else {
           resolve({ isRepo: true, branch: stdout.trim() });
         }
+      });
+    });
+  });
+
+  ipcMain.handle('cwd:gitStats', async (_event, dir: string) => {
+    if (!dir) return { filesChanged: 0, linesAdded: 0, linesRemoved: 0, files: [] as string[] };
+    return new Promise<{ filesChanged: number; linesAdded: number; linesRemoved: number; files: string[] }>((resolve) => {
+      // Include both staged and unstaged changes
+      execFile('git', ['-C', dir, 'diff', '--numstat', 'HEAD'], (err, stdout) => {
+        if (err) {
+          // Try without HEAD (new repo, no commits yet)
+          execFile('git', ['-C', dir, 'diff', '--numstat'], (err2, stdout2) => {
+            if (err2) {
+              resolve({ filesChanged: 0, linesAdded: 0, linesRemoved: 0, files: [] });
+              return;
+            }
+            resolve(parseNumstat(stdout2));
+          });
+          return;
+        }
+        resolve(parseNumstat(stdout));
       });
     });
   });
