@@ -84,6 +84,12 @@ contextBridge.exposeInMainWorld('utilAPI', {
   },
 });
 
+contextBridge.exposeInMainWorld('mcpAPI', {
+  list(): Promise<{ name: string; type: string; command: string }[]> {
+    return ipcRenderer.invoke('mcp:list');
+  },
+});
+
 contextBridge.exposeInMainWorld('modelAPI', {
   get(): Promise<string> {
     return ipcRenderer.invoke('model:get');

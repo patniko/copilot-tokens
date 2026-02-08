@@ -47,6 +47,10 @@ interface ModelAPI {
   list(): Promise<{ id: string; name: string; contextWindow: number }[]>;
 }
 
+interface McpAPI {
+  list(): Promise<{ name: string; type: string; command: string }[]>;
+}
+
 declare global {
   interface Window {
     copilotAPI: CopilotAPI;
@@ -55,6 +59,7 @@ declare global {
     cwdAPI: CwdAPI;
     utilAPI: UtilAPI;
     modelAPI: ModelAPI;
+    mcpAPI: McpAPI;
   }
 }
 

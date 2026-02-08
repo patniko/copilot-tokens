@@ -66,7 +66,10 @@ export default function App() {
     setPermissionRequest(null);
   }, [permissionRequest, cwd]);
 
-  // Load CWD + git info + model on mount
+  const [mcpServers, setMcpServers] = useState<{ name: string; type: string; command: string }[]>([]);
+  const [mcpDropdownOpen, setMcpDropdownOpen] = useState(false);
+
+  // Load CWD + git info + model + MCP servers on mount
   useEffect(() => {
     if (window.cwdAPI) {
       window.cwdAPI.get().then((dir) => {
@@ -81,6 +84,9 @@ export default function App() {
     if (window.modelAPI) {
       window.modelAPI.get().then(setCurrentModel);
       window.modelAPI.list().then(setAvailableModels).catch(() => {});
+    }
+    if (window.mcpAPI) {
+      window.mcpAPI.list().then(setMcpServers).catch(() => {});
     }
   }, []);
 
@@ -262,6 +268,44 @@ export default function App() {
                   {availableModels.length === 0 && (
                     <div className="px-3 py-2 text-xs text-[var(--text-secondary)]">Loading…</div>
                   )}
+                </div>
+              </>
+            )}
+          </div>
+          <span className="text-[var(--border-color)]">|</span>
+          <div className="relative">
+            <button
+              onClick={() => setMcpDropdownOpen(!mcpDropdownOpen)}
+              className={`flex items-center gap-1 transition-colors cursor-pointer ${
+                mcpServers.length > 0
+                  ? 'text-[var(--accent-green)] hover:text-[var(--accent-gold)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+              title={`${mcpServers.length} MCP server${mcpServers.length !== 1 ? 's' : ''} connected`}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H2zm0 1.5h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5zM2 9a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2H2zm0 1.5h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5zM12 5a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm0 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
+              {mcpServers.length} MCP
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${mcpDropdownOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
+            </button>
+            {mcpDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMcpDropdownOpen(false)} />
+                <div className="absolute top-full left-0 mt-1 z-50 w-72 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl overflow-hidden">
+                  <div className="px-3 py-2 border-b border-[var(--border-color)] text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">
+                    MCP Servers ({mcpServers.length})
+                  </div>
+                  {mcpServers.length === 0 && (
+                    <div className="px-3 py-3 text-xs text-[var(--text-secondary)]">No MCP servers configured</div>
+                  )}
+                  {mcpServers.map((s) => (
+                    <div key={s.name} className="px-3 py-2 flex items-center gap-2 border-b border-[var(--border-color)] last:border-b-0">
+                      <span className="w-2 h-2 rounded-full bg-[var(--accent-green)] shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-[var(--text-primary)] truncate">{s.name}</div>
+                        <div className="text-[10px] text-[var(--text-secondary)] truncate">{s.type} · {s.command}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </>
             )}

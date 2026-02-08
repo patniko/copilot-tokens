@@ -30,7 +30,7 @@ async function loadSDK(): Promise<typeof import('@github/copilot-sdk')> {
 }
 
 /** Load MCP server configs from ~/.copilot/mcp-config.json and installed plugins */
-function loadMCPServers(): Record<string, MCPServerConfig> {
+export function loadMCPServers(): Record<string, MCPServerConfig> {
   const servers: Record<string, MCPServerConfig> = {};
   const copilotDir = join(homedir(), '.copilot');
 

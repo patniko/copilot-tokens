@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow, dialog, app } from 'electron';
 import { execFile } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CopilotService } from './copilot-service';
+import { CopilotService, loadMCPServers } from './copilot-service';
 import { StatsService, SessionStats } from './stats-service';
 import { PermissionService } from './permission-service';
 
@@ -206,6 +206,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (!dir) return;
     const script = `tell application "Terminal" to do script "cd ${dir.replace(/"/g, '\\"')} && copilot"`;
     execFile('osascript', ['-e', script]);
+  });
+
+  ipcMain.handle('mcp:list', () => {
+    const servers = loadMCPServers();
+    return Object.entries(servers).map(([name, cfg]) => ({
+      name,
+      type: ('type' in cfg && cfg.type) ? cfg.type : 'stdio',
+      command: ('command' in cfg ? cfg.command : ('url' in cfg ? cfg.url : '')),
+    }));
   });
 
   ipcMain.handle('model:get', () => {
