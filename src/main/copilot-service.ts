@@ -168,6 +168,11 @@ export class CopilotService {
       console.log('[CopilotService] Resolved CLI path:', cliPath || '(SDK default)');
       const opts: Record<string, unknown> = { autoStart: false };
       if (cliPath) opts.cliPath = cliPath;
+      // In packaged Electron, process.execPath is the Electron binary.
+      // ELECTRON_RUN_AS_NODE makes it behave as plain Node.js when spawning the CLI.
+      if (app.isPackaged) {
+        opts.env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+      }
       this.client = new CopilotClient(opts as ConstructorParameters<typeof CopilotClient>[0]);
       await this.client.start();
       this.started = true;
