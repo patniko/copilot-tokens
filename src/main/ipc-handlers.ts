@@ -1,10 +1,12 @@
-import { ipcMain, BrowserWindow, dialog, app } from 'electron';
+import { ipcMain, BrowserWindow, dialog, app, shell } from 'electron';
 import { execFile } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CopilotService, loadMCPServers } from './copilot-service';
 import { StatsService, SessionStats } from './stats-service';
 import { PermissionService } from './permission-service';
+import * as auth from './auth-service';
+import * as packs from './pack-service';
 
 function parseNumstat(stdout: string): { filesChanged: number; linesAdded: number; linesRemoved: number; files: string[] } {
   const lines = stdout.trim().split('\n').filter(Boolean);
@@ -122,6 +124,38 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return stats.getCurrentSessionRank(totalTokens);
   });
 
+  ipcMain.handle('stats:getAchievements', () => {
+    return stats.getAchievements();
+  });
+
+  ipcMain.handle('stats:addAchievement', (_event, achievement: { milestoneId: string; label: string; emoji: string; unlockedAt: number }) => {
+    stats.addAchievement(achievement);
+  });
+
+  ipcMain.handle('stats:clearAchievements', () => {
+    stats.clearAchievements();
+  });
+
+  ipcMain.handle('stats:saveSessionEvents', (_event, sessionTimestamp: number, events: unknown[]) => {
+    stats.saveSessionEvents(sessionTimestamp, events as import('./stats-service').SessionEvent[]);
+  });
+
+  ipcMain.handle('stats:getSessionEvents', () => {
+    return stats.getSessionEvents();
+  });
+
+  ipcMain.handle('stats:getSessionEventLog', (_event, sessionTimestamp: number) => {
+    return stats.getSessionEventLog(sessionTimestamp);
+  });
+
+  ipcMain.handle('stats:getLevelProgress', () => {
+    return stats.getLevelProgress();
+  });
+
+  ipcMain.handle('stats:setLevelProgress', (_event, progress: import('./stats-service').LevelProgressData) => {
+    stats.setLevelProgress(progress);
+  });
+
   ipcMain.handle('git:commit', async (_event, message: string, _files: string[]) => {
     // TODO: Implement git commit via child_process
     console.log(`[IPC] git:commit: ${message}`);
@@ -229,4 +263,62 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle('model:list', async () => {
     return copilot.listModels();
   });
+
+  // ── Auth ──
+
+  ipcMain.handle('auth:getCliUser', async () => {
+    return auth.getCliUser();
+  });
+
+  ipcMain.handle('auth:getOAuthUser', () => {
+    return auth.getPersistedOAuthUser();
+  });
+
+  let activeDeviceCode: { deviceCode: string; interval: number } | null = null;
+
+  ipcMain.handle('auth:startOAuth', async () => {
+    const resp = await auth.startDeviceFlow();
+    activeDeviceCode = { deviceCode: resp.device_code, interval: resp.interval };
+    // Open the verification URL in the default browser
+    shell.openExternal(resp.verification_uri);
+    return { userCode: resp.user_code, verificationUri: resp.verification_uri };
+  });
+
+  ipcMain.handle('auth:pollOAuth', async () => {
+    if (!activeDeviceCode) throw new Error('No active device flow');
+    const token = await auth.pollForToken(activeDeviceCode.deviceCode, activeDeviceCode.interval);
+    activeDeviceCode = null;
+    const user = await auth.fetchUser(token);
+    auth.persistOAuth(token, user);
+    auth.setActiveSource('oauth');
+    return user;
+  });
+
+  ipcMain.handle('auth:setActiveSource', (_event, source: 'cli' | 'oauth') => {
+    auth.setActiveSource(source);
+  });
+
+  ipcMain.handle('auth:getActiveSource', () => {
+    return auth.getActiveSource();
+  });
+
+  ipcMain.handle('auth:logoutOAuth', () => {
+    auth.clearOAuth();
+  });
+
+  // ── Packs ──
+
+  ipcMain.handle('packs:milestone:list', () => packs.getMilestonePacks());
+  ipcMain.handle('packs:milestone:save', (_e, pack) => packs.saveMilestonePack(pack));
+  ipcMain.handle('packs:milestone:delete', (_e, id: string) => packs.deleteMilestonePack(id));
+  ipcMain.handle('packs:milestone:setActive', (_e, id: string, active: boolean) => packs.setMilestonePackActive(id, active));
+
+  ipcMain.handle('packs:sound:list', () => packs.getSoundPacks());
+  ipcMain.handle('packs:sound:save', (_e, pack) => packs.saveSoundPack(pack));
+  ipcMain.handle('packs:sound:delete', (_e, id: string) => packs.deleteSoundPack(id));
+  ipcMain.handle('packs:sound:setActive', (_e, id: string) => packs.setSoundPackActive(id));
+
+  ipcMain.handle('packs:theme:list', () => packs.getThemePacks());
+  ipcMain.handle('packs:theme:save', (_e, pack) => packs.saveThemePack(pack));
+  ipcMain.handle('packs:theme:delete', (_e, id: string) => packs.deleteThemePack(id));
 }

@@ -1,7 +1,7 @@
 import { createContext, createElement, useEffect, useState, type ReactNode } from 'react';
 
 export interface Theme {
-  name: 'neon-arcade' | 'retro-casino' | 'minimal';
+  name: string;
   label: string;
   colors: {
     bgPrimary: string;
@@ -19,9 +19,10 @@ export interface Theme {
     neonGlow: boolean;
     particles: boolean;
   };
+  isUserTheme?: boolean;
 }
 
-export const themes: Record<Theme['name'], Theme> = {
+export const themes: Record<string, Theme> = {
   'neon-arcade': {
     name: 'neon-arcade',
     label: 'Neon Arcade',
@@ -75,9 +76,17 @@ export const themes: Record<Theme['name'], Theme> = {
   },
 };
 
+export function registerTheme(theme: Theme): void {
+  themes[theme.name] = theme;
+}
+
+export function removeUserTheme(name: string): void {
+  if (themes[name]?.isUserTheme) delete themes[name];
+}
+
 export interface ThemeContextValue {
   theme: Theme;
-  setTheme: (name: Theme['name']) => void;
+  setTheme: (name: string) => void;
   themes: typeof themes;
 }
 
@@ -120,7 +129,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     applyTheme(theme);
   }, [theme]);
 
-  const setTheme = (name: Theme['name']) => {
+  const setTheme = (name: string) => {
     const next = themes[name];
     if (next) setThemeState(next);
   };

@@ -27,6 +27,35 @@ export interface LifetimeStats {
   fastestResponse: number;
 }
 
+export interface Achievement {
+  milestoneId: string;
+  label: string;
+  emoji: string;
+  unlockedAt: number;
+}
+
+export interface SessionEvent {
+  type: string;       // e.g. 'tool.start', 'token.update', 'milestone.triggered'
+  timestamp: number;
+  data?: Record<string, unknown>;
+}
+
+export interface SessionEventLog {
+  sessionTimestamp: number;
+  events: SessionEvent[];
+}
+
+export interface LevelProgressData {
+  level: number;
+  categoryProgress: {
+    tokens: number;
+    messages: number;
+    toolCalls: number;
+    files: number;
+    lines: number;
+  };
+}
+
 interface StoreSchema {
   sessions: StoredSession[];
   allTimeBests: Partial<Record<keyof SessionStats, number>>;
@@ -38,6 +67,9 @@ interface StoreSchema {
   recentCwds: string[];
   currentCwd: string;
   currentModel: string;
+  achievements: Achievement[];
+  sessionEvents: SessionEventLog[];
+  levelProgress: LevelProgressData;
 }
 
 const store = new Store<StoreSchema>({
@@ -52,6 +84,12 @@ const store = new Store<StoreSchema>({
     recentCwds: [],
     currentCwd: '',
     currentModel: 'claude-sonnet-4',
+    achievements: [],
+    sessionEvents: [],
+    levelProgress: {
+      level: 1,
+      categoryProgress: { tokens: 0, messages: 0, toolCalls: 0, files: 0, lines: 0 },
+    },
   },
 });
 
@@ -151,5 +189,50 @@ export class StatsService {
 
   setModel(model: string): void {
     store.set('currentModel', model);
+  }
+
+  // Achievement tracking
+
+  getAchievements(): Achievement[] {
+    return store.get('achievements');
+  }
+
+  addAchievement(achievement: Achievement): void {
+    const existing = store.get('achievements');
+    if (existing.some((a) => a.milestoneId === achievement.milestoneId)) return;
+    existing.push(achievement);
+    store.set('achievements', existing);
+  }
+
+  clearAchievements(): void {
+    store.set('achievements', []);
+  }
+
+  // Session event recording
+
+  saveSessionEvents(sessionTimestamp: number, events: SessionEvent[]): void {
+    const logs = store.get('sessionEvents');
+    logs.push({ sessionTimestamp, events });
+    // Keep last 20 session replays
+    if (logs.length > 20) logs.splice(0, logs.length - 20);
+    store.set('sessionEvents', logs);
+  }
+
+  getSessionEvents(): SessionEventLog[] {
+    return store.get('sessionEvents');
+  }
+
+  getSessionEventLog(sessionTimestamp: number): SessionEventLog | undefined {
+    return store.get('sessionEvents').find((l) => l.sessionTimestamp === sessionTimestamp);
+  }
+
+  // Level system
+
+  getLevelProgress(): LevelProgressData {
+    return store.get('levelProgress');
+  }
+
+  setLevelProgress(progress: LevelProgressData): void {
+    store.set('levelProgress', progress);
   }
 }

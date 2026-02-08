@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import type { Milestone } from '../lib/milestones';
 import { checkMilestones } from '../lib/milestones';
 import type { DashboardStats } from '../components/TokenDashboard';
+import { partyBus, PartyEvents } from '../lib/party-bus';
 
 export function useMilestones() {
   const [activeMilestone, setActiveMilestone] = useState<Milestone | null>(null);
@@ -18,8 +19,9 @@ export function useMilestones() {
   }, []);
 
   const dismissMilestone = useCallback(() => {
+    partyBus.emit(PartyEvents.MILESTONE_DISMISSED, activeMilestone);
     showNext();
-  }, [showNext]);
+  }, [showNext, activeMilestone]);
 
   const checkStats = useCallback(
     (currentStats: DashboardStats) => {
@@ -34,7 +36,17 @@ export function useMilestones() {
 
       if (triggered.length === 0) return;
 
-      for (const m of triggered) firedRef.current.add(m.id);
+      for (const m of triggered) {
+        firedRef.current.add(m.id);
+        partyBus.emit(PartyEvents.MILESTONE_TRIGGERED, m);
+        // Persist as achievement
+        window.statsAPI?.addAchievement({
+          milestoneId: m.id,
+          label: m.label,
+          emoji: m.emoji,
+          unlockedAt: Date.now(),
+        });
+      }
 
       if (activeMilestone === null && queueRef.current.length === 0) {
         setActiveMilestone(triggered[0]);

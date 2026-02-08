@@ -8,13 +8,25 @@ import Settings from './components/Settings';
 import ReelArea from './components/ReelArea';
 import CommitButton from './components/CommitButton';
 import MilestoneOverlay from './components/MilestoneOverlay';
-import PermissionDialog from './components/PermissionDialog';
+import AvatarMenu from './components/AvatarMenu';
+import PackStudio from './components/PackStudio';
+import TrophyCase from './components/TrophyCase';
+import SessionReplay from './components/SessionReplay';
+import LevelBadge from './components/LevelBadge';
+import LevelUpOverlay from './components/LevelUpOverlay';
+import { useSessionRecorder } from './hooks/useSessionRecorder';
+import { addSessionToProgress, type LevelProgress } from './lib/level-system';
+import { partyBus, PartyEvents } from './lib/party-bus';
 import type { PermissionRequestData, PermissionDecision } from './components/PermissionDialog';
 import { useMilestones } from './hooks/useMilestones';
 
 export default function App() {
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [packStudioOpen, setPackStudioOpen] = useState(false);
+  const [trophyCaseOpen, setTrophyCaseOpen] = useState(false);
+  const [replaySessionTimestamp, setReplaySessionTimestamp] = useState<number | null>(null);
+  const [levelUpLevel, setLevelUpLevel] = useState<number | null>(null);
   const [userPrompt, setUserPrompt] = useState<string | null>(null);
   const [changedFiles, setChangedFiles] = useState<string[]>([]);
   const [inputTokens, setInputTokens] = useState(0);
@@ -24,6 +36,7 @@ export default function App() {
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string; contextWindow: number }[]>([]);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const { activeMilestone, checkStats, dismissMilestone } = useMilestones();
+  const sessionRecorder = useSessionRecorder();
 
   // YOLO mode state
   const [yoloMode, setYoloMode] = useState(false);
@@ -41,8 +54,9 @@ export default function App() {
     setUserPrompt(null);
     latestStatsRef.current = null;
     sessionStartRef.current = null;
+    sessionRecorder.reset();
     setResetKey((k) => k + 1);
-  }, []);
+  }, [sessionRecorder]);
 
   // Permission request state
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestData | null>(null);
@@ -175,6 +189,22 @@ export default function App() {
         toolCalls: stats.toolCalls,
         durationMs,
       });
+      // Save session replay events
+      sessionRecorder.save();
+
+      // Update level progress
+      window.statsAPI?.getLevelProgress().then((lp) => {
+        const { progress: updated, leveledUp, newLevel } = addSessionToProgress(
+          lp as LevelProgress,
+          stats,
+        );
+        window.statsAPI?.setLevelProgress(updated);
+        if (leveledUp) {
+          partyBus.emit(PartyEvents.LEVEL_UP, { level: newLevel });
+          setLevelUpLevel(newLevel);
+        }
+      });
+
       // Reset for next session segment
       sessionStartRef.current = null;
     });
@@ -193,6 +223,7 @@ export default function App() {
             </h1>
           </div>
           <div className="absolute right-4 flex items-center gap-2">
+            <LevelBadge compact />
             <button
               onClick={handleReset}
               className="text-xl hover:scale-110 transition-transform cursor-pointer"
@@ -200,20 +231,12 @@ export default function App() {
             >
               🔄
             </button>
-            <button
-              onClick={() => { setSettingsOpen(true); setLeaderboardOpen(false); }}
-              className="text-xl hover:scale-110 transition-transform cursor-pointer"
-              title="Settings"
-            >
-              ⚙️
-            </button>
-            <button
-              onClick={() => { setLeaderboardOpen(true); setSettingsOpen(false); }}
-              className="text-xl hover:scale-110 transition-transform cursor-pointer"
-              title="Leaderboard"
-            >
-              🏆
-            </button>
+            <AvatarMenu
+              onOpenSettings={() => { setSettingsOpen(true); setLeaderboardOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
+              onOpenLeaderboard={() => { setLeaderboardOpen(true); setSettingsOpen(false); setPackStudioOpen(false); setTrophyCaseOpen(false); }}
+              onOpenPackStudio={() => { setPackStudioOpen(true); setSettingsOpen(false); setLeaderboardOpen(false); setTrophyCaseOpen(false); }}
+              onOpenTrophyCase={() => { setTrophyCaseOpen(true); setSettingsOpen(false); setLeaderboardOpen(false); setPackStudioOpen(false); }}
+            />
           </div>
         </header>
 
@@ -367,16 +390,19 @@ export default function App() {
 
           {/* Reel / Conversation Area (Center) */}
           <section className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            <ReelArea key={resetKey} userPrompt={userPrompt} onUsage={handleUsage} />
+            <ReelArea key={resetKey} userPrompt={userPrompt} onUsage={handleUsage} permissionRequest={permissionRequest} onPermissionRespond={handlePermissionRespond} />
 
             {/* Prompt Bar (Bottom) */}
             <PromptBar onSend={handleSend} />
           </section>
         </main>
-        <Leaderboard isOpen={leaderboardOpen} onClose={() => setLeaderboardOpen(false)} />
+        <Leaderboard isOpen={leaderboardOpen} onClose={() => setLeaderboardOpen(false)} onReplaySession={(ts) => { setLeaderboardOpen(false); setReplaySessionTimestamp(ts); }} />
         <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onCwdChange={refreshGitInfo} onModelChange={setCurrentModel} />
+        <PackStudio isOpen={packStudioOpen} onClose={() => setPackStudioOpen(false)} />
+        <TrophyCase isOpen={trophyCaseOpen} onClose={() => setTrophyCaseOpen(false)} />
+        <SessionReplay sessionTimestamp={replaySessionTimestamp} onClose={() => setReplaySessionTimestamp(null)} />
         <MilestoneOverlay milestone={activeMilestone} onComplete={dismissMilestone} />
-        <PermissionDialog request={permissionRequest} onRespond={handlePermissionRespond} />
+        <LevelUpOverlay level={levelUpLevel} onComplete={() => setLevelUpLevel(null)} />
       </div>
     </ThemeProvider>
   );

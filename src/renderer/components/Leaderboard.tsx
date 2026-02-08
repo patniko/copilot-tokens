@@ -5,6 +5,7 @@ import type { RankedSession, LifetimeStats, SessionStats } from '../../main/stat
 interface LeaderboardProps {
   isOpen: boolean;
   onClose: () => void;
+  onReplaySession?: (sessionTimestamp: number) => void;
 }
 
 const rankBadge = (rank: number) => {
@@ -42,10 +43,11 @@ const bestLabels: Record<string, { label: string; icon: string }> = {
   durationMs: { label: 'Longest Session', icon: '⏱️' },
 };
 
-export default function Leaderboard({ isOpen, onClose }: LeaderboardProps) {
+export default function Leaderboard({ isOpen, onClose, onReplaySession }: LeaderboardProps) {
   const [sessions, setSessions] = useState<RankedSession[]>([]);
   const [lifetime, setLifetime] = useState<LifetimeStats | null>(null);
   const [bests, setBests] = useState<Partial<Record<keyof SessionStats, number>>>({});
+  const [replayTimestamps, setReplayTimestamps] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!isOpen) return;
@@ -53,10 +55,12 @@ export default function Leaderboard({ isOpen, onClose }: LeaderboardProps) {
       window.statsAPI.getTopSessions(10),
       window.statsAPI.getLifetimeStats(),
       window.statsAPI.getAllTimeBests(),
-    ]).then(([s, l, b]) => {
+      window.statsAPI.getSessionEvents(),
+    ]).then(([s, l, b, events]) => {
       setSessions(s as RankedSession[]);
       setLifetime(l);
       setBests(b);
+      setReplayTimestamps(new Set(events.map((e: { sessionTimestamp: number }) => e.sessionTimestamp)));
     });
   }, [isOpen]);
 
@@ -185,6 +189,15 @@ export default function Leaderboard({ isOpen, onClose }: LeaderboardProps) {
                             <span>{s.filesChanged} files</span>
                           </div>
                         </div>
+                        {onReplaySession && replayTimestamps.has(s.timestamp) && (
+                          <button
+                            onClick={() => onReplaySession(s.timestamp)}
+                            className="shrink-0 px-2 py-1 text-[10px] rounded bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/40 transition-colors cursor-pointer"
+                            title="Replay session"
+                          >
+                            ▶ Replay
+                          </button>
+                        )}
                       </motion.li>
                     ))}
                   </motion.ul>

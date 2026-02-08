@@ -11,7 +11,7 @@ interface SettingsProps {
   onModelChange?: (model: string) => void;
 }
 
-const themeEmojis: Record<Theme['name'], string> = {
+const themeEmojis: Record<string, string> = {
   'neon-arcade': '🌃',
   'retro-casino': '🎰',
   minimal: '✨',

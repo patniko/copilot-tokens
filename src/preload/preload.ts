@@ -64,6 +64,30 @@ contextBridge.exposeInMainWorld('statsAPI', {
   getCurrentSessionRank(totalTokens: number): Promise<number> {
     return ipcRenderer.invoke('stats:getCurrentSessionRank', totalTokens);
   },
+  getAchievements(): Promise<{ milestoneId: string; label: string; emoji: string; unlockedAt: number }[]> {
+    return ipcRenderer.invoke('stats:getAchievements');
+  },
+  addAchievement(achievement: { milestoneId: string; label: string; emoji: string; unlockedAt: number }): Promise<void> {
+    return ipcRenderer.invoke('stats:addAchievement', achievement);
+  },
+  clearAchievements(): Promise<void> {
+    return ipcRenderer.invoke('stats:clearAchievements');
+  },
+  saveSessionEvents(sessionTimestamp: number, events: { type: string; timestamp: number; data?: Record<string, unknown> }[]): Promise<void> {
+    return ipcRenderer.invoke('stats:saveSessionEvents', sessionTimestamp, events);
+  },
+  getSessionEvents(): Promise<{ sessionTimestamp: number; events: { type: string; timestamp: number; data?: Record<string, unknown> }[] }[]> {
+    return ipcRenderer.invoke('stats:getSessionEvents');
+  },
+  getSessionEventLog(sessionTimestamp: number): Promise<{ sessionTimestamp: number; events: { type: string; timestamp: number; data?: Record<string, unknown> }[] } | undefined> {
+    return ipcRenderer.invoke('stats:getSessionEventLog', sessionTimestamp);
+  },
+  getLevelProgress(): Promise<{ level: number; categoryProgress: { tokens: number; messages: number; toolCalls: number; files: number; lines: number } }> {
+    return ipcRenderer.invoke('stats:getLevelProgress');
+  },
+  setLevelProgress(progress: { level: number; categoryProgress: { tokens: number; messages: number; toolCalls: number; files: number; lines: number } }): Promise<void> {
+    return ipcRenderer.invoke('stats:setLevelProgress', progress);
+  },
 });
 
 contextBridge.exposeInMainWorld('gitAPI', {
@@ -102,6 +126,30 @@ contextBridge.exposeInMainWorld('modelAPI', {
   },
 });
 
+contextBridge.exposeInMainWorld('authAPI', {
+  getCliUser(): Promise<unknown> {
+    return ipcRenderer.invoke('auth:getCliUser');
+  },
+  getOAuthUser(): Promise<unknown> {
+    return ipcRenderer.invoke('auth:getOAuthUser');
+  },
+  startOAuth(): Promise<{ userCode: string; verificationUri: string }> {
+    return ipcRenderer.invoke('auth:startOAuth');
+  },
+  pollOAuth(): Promise<unknown> {
+    return ipcRenderer.invoke('auth:pollOAuth');
+  },
+  setActiveSource(source: string): Promise<void> {
+    return ipcRenderer.invoke('auth:setActiveSource', source);
+  },
+  getActiveSource(): Promise<string> {
+    return ipcRenderer.invoke('auth:getActiveSource');
+  },
+  logoutOAuth(): Promise<void> {
+    return ipcRenderer.invoke('auth:logoutOAuth');
+  },
+});
+
 contextBridge.exposeInMainWorld('cwdAPI', {
   get(): Promise<string> {
     return ipcRenderer.invoke('cwd:get');
@@ -120,5 +168,44 @@ contextBridge.exposeInMainWorld('cwdAPI', {
   },
   gitStats(dir: string): Promise<{ filesChanged: number; linesAdded: number; linesRemoved: number; files: string[] }> {
     return ipcRenderer.invoke('cwd:gitStats', dir);
+  },
+});
+
+contextBridge.exposeInMainWorld('packAPI', {
+  // Milestone packs
+  listMilestonePacks(): Promise<unknown[]> {
+    return ipcRenderer.invoke('packs:milestone:list');
+  },
+  saveMilestonePack(pack: unknown): Promise<void> {
+    return ipcRenderer.invoke('packs:milestone:save', pack);
+  },
+  deleteMilestonePack(id: string): Promise<void> {
+    return ipcRenderer.invoke('packs:milestone:delete', id);
+  },
+  setMilestonePackActive(id: string, active: boolean): Promise<void> {
+    return ipcRenderer.invoke('packs:milestone:setActive', id, active);
+  },
+  // Sound packs
+  listSoundPacks(): Promise<unknown[]> {
+    return ipcRenderer.invoke('packs:sound:list');
+  },
+  saveSoundPack(pack: unknown): Promise<void> {
+    return ipcRenderer.invoke('packs:sound:save', pack);
+  },
+  deleteSoundPack(id: string): Promise<void> {
+    return ipcRenderer.invoke('packs:sound:delete', id);
+  },
+  setSoundPackActive(id: string): Promise<void> {
+    return ipcRenderer.invoke('packs:sound:setActive', id);
+  },
+  // Theme packs
+  listThemePacks(): Promise<unknown[]> {
+    return ipcRenderer.invoke('packs:theme:list');
+  },
+  saveThemePack(pack: unknown): Promise<void> {
+    return ipcRenderer.invoke('packs:theme:save', pack);
+  },
+  deleteThemePack(id: string): Promise<void> {
+    return ipcRenderer.invoke('packs:theme:delete', id);
   },
 });

@@ -1,4 +1,6 @@
-import type { SessionStats, LifetimeStats } from '../../main/stats-service';
+import type { SessionStats, LifetimeStats, Achievement, SessionEvent, SessionEventLog, LevelProgressData } from '../../main/stats-service';
+import type { GitHubUser, AuthSource } from '../../main/auth-service';
+import type { MilestonePack, SoundPack, ThemePack } from '../lib/pack-types';
 
 interface CopilotAPI {
   sendMessage(prompt: string, attachments?: { path: string }[]): void;
@@ -20,6 +22,14 @@ interface StatsAPI {
   recordSession(stats: SessionStats): Promise<void>;
   getLifetimeStats(): Promise<LifetimeStats>;
   getCurrentSessionRank(totalTokens: number): Promise<number>;
+  getAchievements(): Promise<Achievement[]>;
+  addAchievement(achievement: Achievement): Promise<void>;
+  clearAchievements(): Promise<void>;
+  saveSessionEvents(sessionTimestamp: number, events: SessionEvent[]): Promise<void>;
+  getSessionEvents(): Promise<SessionEventLog[]>;
+  getSessionEventLog(sessionTimestamp: number): Promise<SessionEventLog | undefined>;
+  getLevelProgress(): Promise<LevelProgressData>;
+  setLevelProgress(progress: LevelProgressData): Promise<void>;
 }
 
 interface GitAPI {
@@ -51,6 +61,30 @@ interface McpAPI {
   list(): Promise<{ name: string; type: string; command: string }[]>;
 }
 
+interface PackAPI {
+  listMilestonePacks(): Promise<MilestonePack[]>;
+  saveMilestonePack(pack: MilestonePack): Promise<void>;
+  deleteMilestonePack(id: string): Promise<void>;
+  setMilestonePackActive(id: string, active: boolean): Promise<void>;
+  listSoundPacks(): Promise<SoundPack[]>;
+  saveSoundPack(pack: SoundPack): Promise<void>;
+  deleteSoundPack(id: string): Promise<void>;
+  setSoundPackActive(id: string): Promise<void>;
+  listThemePacks(): Promise<ThemePack[]>;
+  saveThemePack(pack: ThemePack): Promise<void>;
+  deleteThemePack(id: string): Promise<void>;
+}
+
+interface AuthAPI {
+  getCliUser(): Promise<GitHubUser | null>;
+  getOAuthUser(): Promise<GitHubUser | null>;
+  startOAuth(): Promise<{ userCode: string; verificationUri: string }>;
+  pollOAuth(): Promise<GitHubUser>;
+  setActiveSource(source: AuthSource): Promise<void>;
+  getActiveSource(): Promise<AuthSource>;
+  logoutOAuth(): Promise<void>;
+}
+
 declare global {
   interface Window {
     copilotAPI: CopilotAPI;
@@ -60,6 +94,8 @@ declare global {
     utilAPI: UtilAPI;
     modelAPI: ModelAPI;
     mcpAPI: McpAPI;
+    packAPI: PackAPI;
+    authAPI: AuthAPI;
   }
 }
 

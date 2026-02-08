@@ -1,4 +1,5 @@
 import type { DashboardStats } from '../components/TokenDashboard';
+import type { MilestonePack } from './pack-types';
 
 export interface Milestone {
   id: string;
@@ -24,6 +25,19 @@ export const MILESTONES: Milestone[] = [
   { id: 'edit-100',    threshold: 100,       metric: 'linesInEdit',  label: 'Big Bang Edit!',     emoji: '💥', effect: 'banner',   sound: 'milestone' },
 ];
 
+// User milestone packs loaded from pack store
+let userPacks: MilestonePack[] = [];
+
+export function setUserMilestonePacks(packs: MilestonePack[]): void {
+  userPacks = packs;
+}
+
+/** Returns built-in milestones merged with active user packs */
+export function getAllMilestones(): Milestone[] {
+  const extras = userPacks.filter((p) => p.active).flatMap((p) => p.milestones);
+  return [...MILESTONES, ...extras];
+}
+
 function getMetricValue(stats: DashboardStats, metric: Milestone['metric']): number {
   switch (metric) {
     case 'totalTokens':  return stats.inputTokens + stats.outputTokens;
@@ -38,7 +52,7 @@ export function checkMilestones(
 ): Milestone[] {
   const triggered: Milestone[] = [];
 
-  for (const m of MILESTONES) {
+  for (const m of getAllMilestones()) {
     const prev = getMetricValue(previousStats, m.metric);
     const curr = getMetricValue(stats, m.metric);
     if (prev < m.threshold && curr >= m.threshold) {

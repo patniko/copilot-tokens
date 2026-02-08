@@ -1,0 +1,165 @@
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { MILESTONES, getAllMilestones, type Milestone } from '../lib/milestones';
+import type { Achievement } from '../../main/stats-service';
+
+interface TrophyCaseProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const formatDate = (ts: number) =>
+  new Date(ts).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+export default function TrophyCase({ isOpen, onClose }: TrophyCaseProps) {
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const unlockedIds = new Set(achievements.map((a) => a.milestoneId));
+
+  useEffect(() => {
+    if (!isOpen) return;
+    window.statsAPI?.getAchievements().then(setAchievements);
+  }, [isOpen]);
+
+  const allMilestones = getAllMilestones();
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            className="fixed inset-0 z-40 bg-black/50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+          />
+
+          <motion.aside
+            className="fixed top-0 right-0 z-50 h-full w-[400px] border-l border-[var(--border-color)] bg-[var(--bg-secondary)] flex flex-col overflow-hidden"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 26, stiffness: 240 }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)]">
+              <h2 className="text-lg font-bold tracking-widest text-[var(--accent-gold)] led-text">
+                🏅 TROPHY CASE
+              </h2>
+              <button
+                onClick={onClose}
+                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xl leading-none cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+              {/* Stats bar */}
+              <div className="flex gap-3">
+                <div className="glass-card flex-1 p-3 text-center">
+                  <div className="text-2xl font-bold text-[var(--accent-gold)]">{achievements.length}</div>
+                  <div className="text-[10px] text-[var(--text-secondary)] uppercase tracking-wider">Unlocked</div>
+                </div>
+                <div className="glass-card flex-1 p-3 text-center">
+                  <div className="text-2xl font-bold text-[var(--text-secondary)]">{allMilestones.length - achievements.length}</div>
+                  <div className="text-[10px] text-[var(--text-secondary)] uppercase tracking-wider">Remaining</div>
+                </div>
+                <div className="glass-card flex-1 p-3 text-center">
+                  <div className="text-2xl font-bold text-[var(--accent-purple)]">
+                    {allMilestones.length > 0 ? Math.round((achievements.length / allMilestones.length) * 100) : 0}%
+                  </div>
+                  <div className="text-[10px] text-[var(--text-secondary)] uppercase tracking-wider">Complete</div>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full h-2 rounded-full bg-[var(--bg-primary)] overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-[var(--accent-purple)] to-[var(--accent-gold)]"
+                  initial={{ width: 0 }}
+                  animate={{ width: allMilestones.length > 0 ? `${(achievements.length / allMilestones.length) * 100}%` : '0%' }}
+                  transition={{ duration: 0.8, ease: 'easeOut' }}
+                />
+              </div>
+
+              {/* Badge grid */}
+              <div className="grid grid-cols-3 gap-3">
+                {allMilestones.map((m) => {
+                  const unlocked = unlockedIds.has(m.id);
+                  const achievement = achievements.find((a) => a.milestoneId === m.id);
+                  return (
+                    <motion.div
+                      key={m.id}
+                      className={`glass-card p-3 flex flex-col items-center gap-1.5 text-center transition-colors ${
+                        unlocked ? '' : 'opacity-40 grayscale'
+                      }`}
+                      whileHover={unlocked ? { scale: 1.05 } : {}}
+                      title={unlocked && achievement ? `Unlocked ${formatDate(achievement.unlockedAt)}` : 'Locked'}
+                    >
+                      <span className={`text-2xl ${unlocked ? '' : 'blur-[2px]'}`}>
+                        {unlocked ? m.emoji : '🔒'}
+                      </span>
+                      <span className="text-[10px] font-bold text-[var(--text-primary)] leading-tight">
+                        {m.label}
+                      </span>
+                      {unlocked && achievement && (
+                        <span className="text-[8px] text-[var(--accent-gold)]">
+                          {new Date(achievement.unlockedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                      )}
+                      {!unlocked && (
+                        <span className="text-[8px] text-[var(--text-secondary)]">
+                          {m.metric === 'totalTokens' ? `${(m.threshold / 1000).toFixed(0)}K tokens` :
+                           m.metric === 'filesChanged' ? `${m.threshold} files` :
+                           `${m.threshold} lines`}
+                        </span>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              {/* Recently unlocked */}
+              {achievements.length > 0 && (
+                <section>
+                  <h3 className="text-xs uppercase tracking-wider text-[var(--text-secondary)] mb-2">
+                    Recently Unlocked
+                  </h3>
+                  <div className="flex flex-col gap-1.5">
+                    {[...achievements]
+                      .sort((a, b) => b.unlockedAt - a.unlockedAt)
+                      .slice(0, 5)
+                      .map((a) => (
+                        <div key={a.milestoneId} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-primary)]">
+                          <span className="text-lg">{a.emoji}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-[var(--text-primary)] truncate">{a.label}</div>
+                            <div className="text-[10px] text-[var(--text-secondary)]">{formatDate(a.unlockedAt)}</div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </section>
+              )}
+
+              {achievements.length === 0 && (
+                <div className="text-center py-8 text-[var(--text-secondary)]">
+                  <p className="text-3xl mb-2">🏅</p>
+                  <p className="text-sm">No achievements yet!</p>
+                  <p className="text-xs mt-1">Start chatting to unlock badges.</p>
+                </div>
+              )}
+            </div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}

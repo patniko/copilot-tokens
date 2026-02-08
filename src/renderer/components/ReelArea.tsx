@@ -15,11 +15,17 @@ import {
   GenericToolTile,
   UserBubble,
 } from './tiles';
+import { partyBus, PartyEvents } from '../lib/party-bus';
+import { getTileRenderer } from '../lib/tile-registry';
+import PermissionDialog from './PermissionDialog';
+import type { PermissionRequestData, PermissionDecision } from './PermissionDialog';
 
 interface ReelAreaProps {
   userPrompt: string | null;
   onUserMessage?: (msg: UserMessage) => void;
   onUsage?: (input: number, output: number) => void;
+  permissionRequest?: PermissionRequestData | null;
+  onPermissionRespond?: (decision: PermissionDecision) => void;
 }
 
 function generateId(): string {
@@ -50,11 +56,14 @@ function toolTitleFromArgs(toolName: string, toolType: ToolCallMessage['toolType
   if (toolType === 'file_edit') return String(args.path ?? toolName);
   if (toolType === 'file_read') return String(args.path ?? args.pattern ?? toolName);
   if (toolName === 'task') return `🤖 Sub-agent: ${String(args.description ?? toolName)}`;
+  // For generic tools, prefer a human-friendly description if available
+  const desc = args.description ?? args.subject ?? args.title ?? args.fact;
+  if (desc) return `${toolName}: ${String(desc)}`;
   return toolName;
 }
 
 
-export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAreaProps) {
+export default function ReelArea({ userPrompt, onUserMessage, onUsage, permissionRequest, onPermissionRespond }: ReelAreaProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [intent, setIntent] = useState<string | null>(null);
   const [isWaiting, setIsWaiting] = useState(false);
@@ -147,6 +156,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
 
         case 'tool.start': {
           setIsWaiting(false);
+          partyBus.emit(PartyEvents.TOOL_START, event.toolName, event.toolCallId);
           // report_intent: update the intent badge instead of creating a tile
           if (event.toolName === 'report_intent') {
             const intentText = String(event.args.intent ?? event.args.description ?? '');
@@ -162,7 +172,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
             type: 'tool_call',
             toolType: tt,
             title,
-            data: { ...event.args, completed: false },
+            data: { ...event.args, completed: false, _toolName: event.toolName },
             toolCallId: event.toolCallId,
             timestamp: Date.now(),
           };
@@ -195,6 +205,11 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
         }
 
         case 'tool.complete': {
+          partyBus.emit(
+            event.success ? PartyEvents.TOOL_COMPLETE : PartyEvents.TOOL_ERROR,
+            event.toolCallId,
+            event.error,
+          );
           setMessages((prev) =>
             prev.map((m) => {
               if (m.type !== 'tool_call' || m.toolCallId !== event.toolCallId) return m;
@@ -251,6 +266,7 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
         case 'session.idle': {
           setIsWaiting(false);
           setIsGenerating(false);
+          partyBus.emit(PartyEvents.SESSION_IDLE);
           setMessages((prev) =>
             prev.map((m) =>
               m.type === 'assistant' && m.isStreaming
@@ -275,13 +291,13 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
     return () => clearInterval(interval);
   }, [isGenerating]);
 
-  // Auto-scroll on new messages
+  // Auto-scroll on new messages or permission request
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: 'smooth',
     });
-  }, [messages]);
+  }, [messages, permissionRequest]);
 
   const springTransition = useMemo(
     () => ({ type: 'spring' as const, stiffness: 300, damping: 25 }),
@@ -326,7 +342,24 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
                 {msg.type === 'assistant' && (
                   <MessageTile content={msg.content} isStreaming={msg.isStreaming} />
                 )}
-                {msg.type === 'tool_call' && msg.toolType === 'bash' && (
+                {msg.type === 'tool_call' && (() => {
+                  const toolName = msg.data._toolName as string | undefined;
+                  const CustomTile = toolName ? getTileRenderer(toolName) : undefined;
+                  if (CustomTile) {
+                    return (
+                      <CustomTile
+                        title={msg.title}
+                        data={msg.data}
+                        isRunning={!msg.data.completed}
+                        success={typeof msg.data.success === 'boolean' ? (msg.data.success as boolean) : undefined}
+                        error={msg.data.error ? String(msg.data.error) : undefined}
+                        progress={msg.data.progress ? String(msg.data.progress) : undefined}
+                      />
+                    );
+                  }
+                  return null;
+                })()}
+                {msg.type === 'tool_call' && !getTileRenderer(msg.data._toolName as string) && msg.toolType === 'bash' && (
                   <BashTile
                     command={String(msg.data.command ?? msg.title)}
                     output={msg.data.output ? String(msg.data.output) : undefined}
@@ -336,21 +369,21 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
                     error={msg.data.error ? String(msg.data.error) : undefined}
                   />
                 )}
-                {msg.type === 'tool_call' && msg.toolType === 'file_edit' && (
+                {msg.type === 'tool_call' && !getTileRenderer(msg.data._toolName as string) && msg.toolType === 'file_edit' && (
                   <FileEditTile
                     path={String(msg.data.path ?? msg.title)}
                     diff={msg.data.diff ? String(msg.data.diff) : undefined}
                     isRunning={!msg.data.completed}
                   />
                 )}
-                {msg.type === 'tool_call' && msg.toolType === 'file_read' && (
+                {msg.type === 'tool_call' && !getTileRenderer(msg.data._toolName as string) && msg.toolType === 'file_read' && (
                   <FileReadTile
                     path={String(msg.data.path ?? msg.title)}
                     content={msg.data.content ? String(msg.data.content) : undefined}
                     isRunning={!msg.data.completed}
                   />
                 )}
-                {msg.type === 'tool_call' && msg.toolType === 'generic' && (
+                {msg.type === 'tool_call' && !getTileRenderer(msg.data._toolName as string) && msg.toolType === 'generic' && (
                   <GenericToolTile
                     title={msg.title}
                     data={msg.data}
@@ -363,6 +396,19 @@ export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAre
               </motion.div>
             );
           })}
+
+          {/* Permission request — inline in chat */}
+          {permissionRequest && onPermissionRespond && (
+            <motion.div
+              key="permission"
+              initial={{ y: 30, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -10, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            >
+              <PermissionDialog request={permissionRequest} onRespond={onPermissionRespond} />
+            </motion.div>
+          )}
 
           {/* Thinking indicator — shown after user sends, before first event */}
           {isWaiting && (

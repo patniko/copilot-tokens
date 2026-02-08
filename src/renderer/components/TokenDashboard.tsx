@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import OdometerCounter from './OdometerCounter';
 import ContextProgressBar from './ContextProgressBar';
+import { partyBus, PartyEvents } from '../lib/party-bus';
 
 export interface DashboardStats {
   inputTokens: number;
@@ -41,8 +42,17 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
   }, [stats]);
 
   // Report stats upstream (merge token stats + git stats)
+  const prevTotalRef = useRef(0);
   useEffect(() => {
-    onStatsUpdate?.({ ...stats, filesChanged: gitStats.filesChanged, linesAdded: gitStats.linesAdded, linesRemoved: gitStats.linesRemoved });
+    const merged = { ...stats, filesChanged: gitStats.filesChanged, linesAdded: gitStats.linesAdded, linesRemoved: gitStats.linesRemoved };
+    onStatsUpdate?.(merged);
+    // Emit Party Bus events when crossing token thresholds
+    const total = stats.inputTokens + stats.outputTokens;
+    const prev = prevTotalRef.current;
+    for (const t of [1000, 5000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]) {
+      if (prev < t && total >= t) partyBus.emit(PartyEvents.TOKENS_CROSSED(t), total);
+    }
+    prevTotalRef.current = total;
   }, [stats, gitStats, onStatsUpdate]);
 
   // Sync inputTokenCount prop

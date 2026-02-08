@@ -2,6 +2,52 @@ export type SoundName = 'leverPull' | 'tokenTick' | 'milestone' | 'jackpot' | 'c
 
 type SoundGenerator = (ctx: AudioContext, dest: GainNode) => void;
 
+export interface SoundConfig {
+  waveform: OscillatorType;
+  frequency: number;
+  attack: number;
+  decay: number;
+  gain: number;
+  filterFreq?: number;
+  filterType?: BiquadFilterType;
+}
+
+/** Create a SoundGenerator from a simple SoundConfig descriptor */
+export function generatorFromConfig(cfg: SoundConfig): SoundGenerator {
+  return (ctx, dest) => {
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = cfg.waveform;
+    osc.frequency.value = cfg.frequency;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(cfg.gain, t + cfg.attack);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + cfg.attack + cfg.decay);
+
+    let node: AudioNode = osc;
+    if (cfg.filterFreq && cfg.filterType) {
+      const filter = ctx.createBiquadFilter();
+      filter.type = cfg.filterType;
+      filter.frequency.value = cfg.filterFreq;
+      osc.connect(filter);
+      node = filter;
+    }
+    node.connect(gain).connect(dest);
+    osc.start(t);
+    osc.stop(t + cfg.attack + cfg.decay + 0.01);
+  };
+}
+
+/** Preview a SoundConfig directly (used by Pack Studio) */
+export function previewSoundConfig(cfg: SoundConfig): void {
+  const ctx = new AudioContext();
+  const masterGain = ctx.createGain();
+  masterGain.gain.value = 0.5;
+  masterGain.connect(ctx.destination);
+  generatorFromConfig(cfg)(ctx, masterGain);
+}
+
 const sounds: Record<SoundName, SoundGenerator> = {
   // Short mechanical click — quick burst of noise, slight pitch down
   leverPull(ctx, dest) {
@@ -271,6 +317,8 @@ class SoundManager {
   private volume = 0.5;
   private masterGain: GainNode | null = null;
 
+  private overrides: Partial<Record<SoundName, SoundGenerator>> = {};
+
   private constructor() {}
 
   static getInstance(): SoundManager {
@@ -278,6 +326,19 @@ class SoundManager {
       SoundManager.instance = new SoundManager();
     }
     return SoundManager.instance;
+  }
+
+  /** Load a sound pack — overrides specified slots with config-based generators */
+  loadPack(slots: Partial<Record<SoundName, SoundConfig>>): void {
+    this.overrides = {};
+    for (const [name, cfg] of Object.entries(slots) as [SoundName, SoundConfig][]) {
+      if (cfg) this.overrides[name] = generatorFromConfig(cfg);
+    }
+  }
+
+  /** Clear any loaded pack, revert to built-in sounds */
+  clearPack(): void {
+    this.overrides = {};
   }
 
   private ensureContext(): AudioContext {
@@ -296,7 +357,8 @@ class SoundManager {
   play(sound: SoundName): void {
     if (!this.enabled) return;
     const ctx = this.ensureContext();
-    sounds[sound](ctx, this.masterGain!);
+    const generator = this.overrides[sound] ?? sounds[sound];
+    generator(ctx, this.masterGain!);
   }
 
   setEnabled(enabled: boolean): void {

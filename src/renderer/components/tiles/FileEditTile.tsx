@@ -7,6 +7,13 @@ interface FileEditTileProps {
   isRunning?: boolean;
 }
 
+function friendlyPath(p: string): { name: string; dir: string } {
+  const parts = p.replace(/\\/g, '/').split('/');
+  const name = parts.pop() || p;
+  const dir = parts.slice(-2).join('/');
+  return { name, dir };
+}
+
 function parseDiffStats(diff: string) {
   const lines = diff.split('\n');
   let added = 0;
@@ -27,6 +34,7 @@ export default function FileEditTile({ path, diff, isRunning }: FileEditTileProp
       ? parsed.lines
       : parsed.lines.slice(0, 10)
     : [];
+  const { name, dir } = friendlyPath(path);
 
   return (
     <div
@@ -34,7 +42,7 @@ export default function FileEditTile({ path, diff, isRunning }: FileEditTileProp
       style={{ borderLeft: '4px solid var(--accent-blue)' }}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 mb-3 min-w-0">
+      <div className="flex items-center gap-2 mb-3 min-w-0" title={path}>
         {isRunning ? (
           <motion.span
             animate={{ rotate: 360 }}
@@ -53,12 +61,14 @@ export default function FileEditTile({ path, diff, isRunning }: FileEditTileProp
             📄
           </motion.span>
         )}
-        <span
-          className="text-sm font-mono truncate"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          {path}
+        <span className="text-sm font-mono truncate" style={{ color: 'var(--text-primary)' }}>
+          {name}
         </span>
+        {dir && (
+          <span className="text-xs text-[var(--text-secondary)] truncate shrink">
+            {dir}
+          </span>
+        )}
         {isRunning && (
           <span className="text-xs italic" style={{ color: 'var(--text-secondary)' }}>editing…</span>
         )}
