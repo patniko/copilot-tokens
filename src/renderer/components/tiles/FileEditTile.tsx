@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 interface FileEditTileProps {
   path: string;
   diff?: string;
+  isRunning?: boolean;
 }
 
 function parseDiffStats(diff: string) {
@@ -17,7 +18,7 @@ function parseDiffStats(diff: string) {
   return { added, removed, lines };
 }
 
-export default function FileEditTile({ path, diff }: FileEditTileProps) {
+export default function FileEditTile({ path, diff, isRunning }: FileEditTileProps) {
   const parsed = diff ? parseDiffStats(diff) : null;
   const isLong = parsed ? parsed.lines.length > 10 : false;
   const [expanded, setExpanded] = useState(false);
@@ -34,20 +35,33 @@ export default function FileEditTile({ path, diff }: FileEditTileProps) {
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
-        <motion.span
-          initial={{ rotate: 0 }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-          style={{ display: 'inline-block' }}
-        >
-          📄
-        </motion.span>
+        {isRunning ? (
+          <motion.span
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            style={{ display: 'inline-block' }}
+          >
+            📄
+          </motion.span>
+        ) : (
+          <motion.span
+            initial={{ rotate: 0 }}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+            style={{ display: 'inline-block' }}
+          >
+            📄
+          </motion.span>
+        )}
         <span
           className="text-sm font-mono truncate"
           style={{ color: 'var(--text-primary)' }}
         >
           {path}
         </span>
+        {isRunning && (
+          <span className="text-xs italic" style={{ color: 'var(--text-secondary)' }}>editing…</span>
+        )}
       </div>
 
       {/* Stats */}

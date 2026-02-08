@@ -4,22 +4,36 @@ import { motion } from 'motion/react';
 interface BashTileProps {
   command: string;
   output?: string;
+  isRunning?: boolean;
+  progress?: string;
+  success?: boolean;
+  error?: string;
 }
 
-export default function BashTile({ command, output }: BashTileProps) {
+export default function BashTile({ command, output, isRunning, progress, success, error }: BashTileProps) {
   const lines = output ? output.split('\n') : [];
   const isLong = lines.length > 5;
   const [expanded, setExpanded] = useState(false);
   const visibleLines = expanded ? lines : lines.slice(0, 5);
 
+  const borderColor = error ? 'var(--accent-red)' : 'var(--accent-green)';
+
   return (
     <div
       className="glass-card w-full p-4"
-      style={{ borderLeft: '4px solid var(--accent-green)' }}
+      style={{ borderLeft: `4px solid ${borderColor}` }}
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
-        <span style={{ color: 'var(--accent-green)' }}>●</span>
+        {isRunning ? (
+          <span style={{ color: 'var(--accent-green)', animation: 'pulse-dot 1.5s ease-in-out infinite' }}>●</span>
+        ) : success === false || error ? (
+          <span style={{ color: 'var(--accent-red)' }}>✗</span>
+        ) : success === true ? (
+          <span style={{ color: 'var(--accent-green)' }}>✓</span>
+        ) : (
+          <span style={{ color: 'var(--accent-green)' }}>●</span>
+        )}
         <span
           className="text-sm font-bold uppercase tracking-wider"
           style={{ color: 'var(--accent-green)' }}
@@ -35,6 +49,13 @@ export default function BashTile({ command, output }: BashTileProps) {
       >
         $ {command}
       </div>
+
+      {/* Progress */}
+      {progress && (
+        <div className="text-xs italic mb-2" style={{ color: 'var(--text-secondary)' }}>
+          {progress}
+        </div>
+      )}
 
       {/* Output */}
       {lines.length > 0 && (
@@ -59,6 +80,13 @@ export default function BashTile({ command, output }: BashTileProps) {
         </motion.div>
       )}
 
+      {/* Error */}
+      {error && (
+        <div className="text-xs mt-2 font-mono" style={{ color: 'var(--accent-red)' }}>
+          {error}
+        </div>
+      )}
+
       {/* Show more/less */}
       {isLong && (
         <button
@@ -69,6 +97,13 @@ export default function BashTile({ command, output }: BashTileProps) {
           {expanded ? 'Show less' : `Show more (${lines.length - 5} more lines)`}
         </button>
       )}
+
+      <style>{`
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+      `}</style>
     </div>
   );
 }

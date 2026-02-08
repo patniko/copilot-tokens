@@ -4,3 +4,4 @@ export { default as FileEditTile } from './FileEditTile';
 export { default as FileReadTile } from './FileReadTile';
 export { default as GenericToolTile } from './GenericToolTile';
 export { default as UserBubble } from './UserBubble';
+export { default as IntentBadge } from './IntentBadge';

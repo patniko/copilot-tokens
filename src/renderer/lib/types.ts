@@ -19,6 +19,7 @@ export interface ToolCallMessage {
   toolType: 'bash' | 'file_edit' | 'file_read' | 'generic';
   title: string;
   data: Record<string, unknown>;
+  toolCallId?: string;
   timestamp: number;
 }
 

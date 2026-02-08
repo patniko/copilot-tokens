@@ -4,9 +4,10 @@ import { motion } from 'motion/react';
 interface FileReadTileProps {
   path: string;
   content?: string;
+  isRunning?: boolean;
 }
 
-export default function FileReadTile({ path, content }: FileReadTileProps) {
+export default function FileReadTile({ path, content, isRunning }: FileReadTileProps) {
   const lines = content ? content.split('\n') : [];
   const isTruncated = lines.length > 10;
   const [expanded, setExpanded] = useState(false);
@@ -26,6 +27,11 @@ export default function FileReadTile({ path, content }: FileReadTileProps) {
         >
           {path}
         </span>
+        {isRunning && (
+          <span className="text-xs italic" style={{ color: 'var(--text-secondary)', animation: 'pulse-dot 1.5s ease-in-out infinite' }}>
+            reading…
+          </span>
+        )}
       </div>
 
       {/* Content */}

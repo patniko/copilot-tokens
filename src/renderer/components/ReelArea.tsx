@@ -14,11 +14,13 @@ import {
   FileReadTile,
   GenericToolTile,
   UserBubble,
+  IntentBadge,
 } from './tiles';
 
 interface ReelAreaProps {
   userPrompt: string | null;
   onUserMessage?: (msg: UserMessage) => void;
+  onUsage?: (input: number, output: number) => void;
 }
 
 function generateId(): string {
@@ -34,9 +36,25 @@ function getRandomOffset(id: string): number {
   return offsetCache.get(id)!;
 }
 
+function toolTypeFromName(toolName: string): ToolCallMessage['toolType'] {
+  if (toolName === 'bash' || toolName === 'shell') return 'bash';
+  if (toolName === 'edit' || toolName === 'create' || toolName === 'write') return 'file_edit';
+  if (toolName === 'view' || toolName === 'read' || toolName === 'glob' || toolName === 'grep') return 'file_read';
+  return 'generic';
+}
 
-export default function ReelArea({ userPrompt, onUserMessage }: ReelAreaProps) {
+function toolTitleFromArgs(toolName: string, toolType: ToolCallMessage['toolType'], args: Record<string, unknown>): string {
+  if (toolType === 'bash') return String(args.command ?? toolName);
+  if (toolType === 'file_edit') return String(args.path ?? toolName);
+  if (toolType === 'file_read') return String(args.path ?? args.pattern ?? toolName);
+  if (toolName === 'task') return `🤖 Sub-agent: ${String(args.description ?? toolName)}`;
+  return toolName;
+}
+
+
+export default function ReelArea({ userPrompt, onUserMessage, onUsage }: ReelAreaProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [intent, setIntent] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastPromptRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -53,7 +71,6 @@ export default function ReelArea({ userPrompt, onUserMessage }: ReelAreaProps) {
       };
       setMessages((prev) => [...prev, msg]);
       onUserMessage?.(msg);
-      // Reset so next assistant deltas start a fresh message
       currentAssistantIdRef.current = null;
     }
     if (userPrompt === null) {
@@ -92,42 +109,124 @@ export default function ReelArea({ userPrompt, onUserMessage }: ReelAreaProps) {
           break;
         }
 
-        case 'tool_call.bash': {
+        case 'assistant.message': {
+          // Final message — mark streaming done
+          setMessages((prev) => {
+            const currentId = currentAssistantIdRef.current;
+            if (currentId) {
+              return prev.map((m) =>
+                m.id === currentId && m.type === 'assistant'
+                  ? { ...m, content: event.content, isStreaming: false }
+                  : m,
+              );
+            }
+            return prev;
+          });
+          currentAssistantIdRef.current = null;
+          break;
+        }
+
+        case 'assistant.intent': {
+          setIntent(event.intent);
+          break;
+        }
+
+        case 'assistant.usage': {
+          onUsage?.(event.inputTokens, event.outputTokens);
+          break;
+        }
+
+        case 'tool.start': {
+          const tt = toolTypeFromName(event.toolName);
+          const title = toolTitleFromArgs(event.toolName, tt, event.args);
           const msg: ToolCallMessage = {
             id: generateId(),
             type: 'tool_call',
-            toolType: 'bash',
-            title: event.command,
-            data: { command: event.command, output: event.output },
+            toolType: tt,
+            title,
+            data: { ...event.args, completed: false },
+            toolCallId: event.toolCallId,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          // Tool calls interrupt assistant streaming — reset so next deltas start fresh
+          currentAssistantIdRef.current = null;
+          break;
+        }
+
+        case 'tool.partial': {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.type === 'tool_call' && m.toolCallId === event.toolCallId
+                ? { ...m, data: { ...m.data, output: (m.data.output ? String(m.data.output) : '') + event.output } }
+                : m,
+            ),
+          );
+          break;
+        }
+
+        case 'tool.progress': {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.type === 'tool_call' && m.toolCallId === event.toolCallId
+                ? { ...m, data: { ...m.data, progress: event.message } }
+                : m,
+            ),
+          );
+          break;
+        }
+
+        case 'tool.complete': {
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.type !== 'tool_call' || m.toolCallId !== event.toolCallId) return m;
+              const updated: Record<string, unknown> = { ...m.data, completed: true, success: event.success };
+              if (event.error) updated.error = event.error;
+              if (event.result) {
+                if (m.toolType === 'bash' && !m.data.output) updated.output = event.result;
+                else if (m.toolType === 'file_edit') updated.diff = event.result;
+                else if (m.toolType === 'file_read') updated.content = event.result;
+                else updated.result = event.result;
+              }
+              return { ...m, data: updated };
+            }),
+          );
+          break;
+        }
+
+        case 'subagent.started': {
+          const msg: ToolCallMessage = {
+            id: generateId(),
+            type: 'tool_call',
+            toolType: 'generic',
+            title: `🤖 ${event.displayName}: ${event.description}`,
+            data: { name: event.name, completed: false },
+            toolCallId: event.toolCallId,
             timestamp: Date.now(),
           };
           setMessages((prev) => [...prev, msg]);
           break;
         }
 
-        case 'tool_call.file_edit': {
-          const msg: ToolCallMessage = {
-            id: generateId(),
-            type: 'tool_call',
-            toolType: 'file_edit',
-            title: event.path,
-            data: { path: event.path, diff: event.diff },
-            timestamp: Date.now(),
-          };
-          setMessages((prev) => [...prev, msg]);
+        case 'subagent.completed': {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.type === 'tool_call' && m.toolCallId === event.toolCallId
+                ? { ...m, data: { ...m.data, completed: true, success: true } }
+                : m,
+            ),
+          );
           break;
         }
 
-        case 'tool_call.file_read': {
-          const msg: ToolCallMessage = {
-            id: generateId(),
-            type: 'tool_call',
-            toolType: 'file_read',
-            title: event.path,
-            data: { path: event.path, content: event.content },
-            timestamp: Date.now(),
-          };
-          setMessages((prev) => [...prev, msg]);
+        case 'subagent.failed': {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.type === 'tool_call' && m.toolCallId === event.toolCallId
+                ? { ...m, data: { ...m.data, completed: true, success: false, error: event.error } }
+                : m,
+            ),
+          );
           break;
         }
 
@@ -140,13 +239,14 @@ export default function ReelArea({ userPrompt, onUserMessage }: ReelAreaProps) {
             ),
           );
           currentAssistantIdRef.current = null;
+          setIntent(null);
           break;
         }
       }
     });
 
     return unsubscribe;
-  }, []);
+  }, [onUsage]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -172,6 +272,7 @@ export default function ReelArea({ userPrompt, onUserMessage }: ReelAreaProps) {
 
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+      <IntentBadge intent={intent} />
       <AnimatePresence initial={false}>
         {messages.map((msg) => {
           const xOffset = getRandomOffset(msg.id);
@@ -192,22 +293,35 @@ export default function ReelArea({ userPrompt, onUserMessage }: ReelAreaProps) {
                 <BashTile
                   command={String(msg.data.command ?? msg.title)}
                   output={msg.data.output ? String(msg.data.output) : undefined}
+                  isRunning={!msg.data.completed}
+                  progress={msg.data.progress ? String(msg.data.progress) : undefined}
+                  success={typeof msg.data.success === 'boolean' ? (msg.data.success as boolean) : undefined}
+                  error={msg.data.error ? String(msg.data.error) : undefined}
                 />
               )}
               {msg.type === 'tool_call' && msg.toolType === 'file_edit' && (
                 <FileEditTile
                   path={String(msg.data.path ?? msg.title)}
                   diff={msg.data.diff ? String(msg.data.diff) : undefined}
+                  isRunning={!msg.data.completed}
                 />
               )}
               {msg.type === 'tool_call' && msg.toolType === 'file_read' && (
                 <FileReadTile
                   path={String(msg.data.path ?? msg.title)}
                   content={msg.data.content ? String(msg.data.content) : undefined}
+                  isRunning={!msg.data.completed}
                 />
               )}
               {msg.type === 'tool_call' && msg.toolType === 'generic' && (
-                <GenericToolTile title={msg.title} data={msg.data} />
+                <GenericToolTile
+                  title={msg.title}
+                  data={msg.data}
+                  isRunning={!msg.data.completed}
+                  success={typeof msg.data.success === 'boolean' ? (msg.data.success as boolean) : undefined}
+                  error={msg.data.error ? String(msg.data.error) : undefined}
+                  progress={msg.data.progress ? String(msg.data.progress) : undefined}
+                />
               )}
             </motion.div>
           );

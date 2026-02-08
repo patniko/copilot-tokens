@@ -62,22 +62,33 @@ export default function TokenDashboard({ inputTokenCount, onStatsUpdate }: Token
         next.messagesCount = Math.max(prev.messagesCount, 1);
       }
 
-      if (type === 'tool_call.file_edit') {
-        next.filesChanged += 1;
+      if (type === 'assistant.usage') {
+        const input = (ev.inputTokens ?? 0) as number;
+        const output = (ev.outputTokens ?? 0) as number;
+        next.inputTokens += input;
+        // Prefer real output token count over our estimate when available
+        if (output > 0) next.outputTokens = output;
+      }
+
+      if (type === 'tool.start') {
         next.toolCalls += 1;
-        // Rough line estimate from diff content
-        const diff = (ev.diff ?? ev.content ?? '') as string;
-        if (diff) {
-          const lines = diff.split('\n');
+        const toolName = (ev.toolName ?? '') as string;
+        if (toolName === 'edit' || toolName === 'create' || toolName === 'write') {
+          next.filesChanged += 1;
+        }
+      }
+
+      if (type === 'tool.complete') {
+        const toolCallId = (ev.toolCallId ?? '') as string;
+        const result = (ev.result ?? '') as string;
+        // Try to detect file edits from result diffs
+        if (result && toolCallId) {
+          const lines = result.split('\n');
           for (const line of lines) {
             if (line.startsWith('+') && !line.startsWith('+++')) next.linesAdded += 1;
             if (line.startsWith('-') && !line.startsWith('---')) next.linesRemoved += 1;
           }
         }
-      }
-
-      if (type === 'tool_call.bash' || type === 'tool_call.file_read') {
-        next.toolCalls += 1;
       }
 
       return next;

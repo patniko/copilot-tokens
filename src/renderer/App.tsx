@@ -15,6 +15,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userPrompt, setUserPrompt] = useState<string | null>(null);
   const [changedFiles, setChangedFiles] = useState<string[]>([]);
+  const [inputTokens, setInputTokens] = useState(0);
   const { activeMilestone, checkStats, dismissMilestone } = useMilestones();
 
   const handleStatsUpdate = useCallback(
@@ -22,16 +23,25 @@ export default function App() {
     [checkStats],
   );
 
+  const handleUsage = useCallback((input: number, _output: number) => {
+    setInputTokens((prev) => prev + input);
+  }, []);
+
   // Track changed files from copilot events
   useEffect(() => {
     if (!window.copilotAPI?.onEvent) return;
     const unsub = window.copilotAPI.onEvent((event: unknown) => {
       const ev = event as Record<string, unknown> | null;
       if (!ev || typeof ev !== 'object') return;
-      if (ev.type === 'tool_call.file_edit') {
-        const filePath = (ev.file ?? ev.path ?? '') as string;
-        if (filePath) {
-          setChangedFiles((prev) => (prev.includes(filePath) ? prev : [...prev, filePath]));
+      // Handle both old and new event shapes for file tracking
+      if (ev.type === 'tool.start') {
+        const toolName = ev.toolName as string | undefined;
+        const args = (ev.args ?? {}) as Record<string, unknown>;
+        if (toolName === 'edit' || toolName === 'create' || toolName === 'write') {
+          const filePath = String(args.path ?? args.file ?? '');
+          if (filePath) {
+            setChangedFiles((prev) => (prev.includes(filePath) ? prev : [...prev, filePath]));
+          }
         }
       }
     });
@@ -74,13 +84,13 @@ export default function App() {
           {/* Token Dashboard (Left Panel) */}
           <aside className="w-64 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] p-4 flex flex-col gap-4 overflow-y-auto">
             <h2 className="text-sm uppercase tracking-wider text-[var(--text-secondary)]">Token Dashboard</h2>
-            <TokenDashboard onStatsUpdate={handleStatsUpdate} />
+            <TokenDashboard inputTokenCount={inputTokens} onStatsUpdate={handleStatsUpdate} />
             <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} />
           </aside>
 
           {/* Reel / Conversation Area (Center) */}
           <section className="flex-1 flex flex-col">
-            <ReelArea userPrompt={userPrompt} />
+            <ReelArea userPrompt={userPrompt} onUsage={handleUsage} />
 
             {/* Prompt Bar (Bottom) */}
             <PromptBar onSend={handleSend} />
