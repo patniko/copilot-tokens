@@ -76,7 +76,10 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
       if (type === 'assistant.message_delta') {
         const delta = (ev.delta ?? ev.content ?? '') as string;
         next.outputTokens += Math.max(1, Math.ceil(delta.length / 4));
-        next.messagesCount = Math.max(prev.messagesCount, 1);
+      }
+
+      if (type === 'session.idle') {
+        next.messagesCount += 1;
       }
 
       if (type === 'assistant.usage') {
