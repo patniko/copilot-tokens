@@ -16,7 +16,37 @@ export default function App() {
   const [userPrompt, setUserPrompt] = useState<string | null>(null);
   const [changedFiles, setChangedFiles] = useState<string[]>([]);
   const [inputTokens, setInputTokens] = useState(0);
+  const [cwd, setCwd] = useState('');
+  const [gitBranch, setGitBranch] = useState<string | null>(null);
   const { activeMilestone, checkStats, dismissMilestone } = useMilestones();
+
+  // Load CWD + git info on mount
+  useEffect(() => {
+    if (!window.cwdAPI) return;
+    window.cwdAPI.get().then((dir) => {
+      if (dir) {
+        setCwd(dir);
+        window.cwdAPI.gitInfo(dir).then((info) => {
+          setGitBranch(info.isRepo ? (info.branch ?? null) : null);
+        });
+      }
+    });
+  }, []);
+
+  const refreshGitInfo = useCallback((dir: string) => {
+    setCwd(dir);
+    if (window.cwdAPI) {
+      window.cwdAPI.gitInfo(dir).then((info) => {
+        setGitBranch(info.isRepo ? (info.branch ?? null) : null);
+      });
+    }
+  }, []);
+
+  const handleBrowseCwd = useCallback(async () => {
+    if (!window.cwdAPI) return;
+    const dir = await window.cwdAPI.browse();
+    if (dir) refreshGitInfo(dir);
+  }, [refreshGitInfo]);
 
   const handleStatsUpdate = useCallback(
     (stats: DashboardStats) => { checkStats(stats); },
@@ -79,6 +109,33 @@ export default function App() {
           </div>
         </header>
 
+        {/* CWD Status Bar */}
+        <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-color)] bg-[var(--bg-primary)] text-xs">
+          <span className="text-[var(--text-secondary)]">📂</span>
+          <button
+            onClick={handleBrowseCwd}
+            className="font-mono text-[var(--text-primary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer truncate max-w-[600px]"
+            title={cwd || 'Click to set working directory'}
+          >
+            {cwd || '(no working directory set — click to choose)'}
+          </button>
+          {gitBranch && (
+            <>
+              <span className="text-[var(--border-color)]">|</span>
+              <span className="text-[var(--accent-green)] flex items-center gap-1">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.5 2.5 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
+                {gitBranch}
+              </span>
+            </>
+          )}
+          <button
+            onClick={handleBrowseCwd}
+            className="ml-auto text-[var(--text-secondary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer text-[10px] uppercase tracking-wider"
+          >
+            Change
+          </button>
+        </div>
+
         {/* Main Content */}
         <main className="flex flex-1 overflow-hidden">
           {/* Token Dashboard (Left Panel) */}
@@ -97,7 +154,7 @@ export default function App() {
           </section>
         </main>
         <Leaderboard isOpen={leaderboardOpen} onClose={() => setLeaderboardOpen(false)} />
-        <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onCwdChange={refreshGitInfo} />
         <MilestoneOverlay milestone={activeMilestone} onComplete={dismissMilestone} />
       </div>
     </ThemeProvider>

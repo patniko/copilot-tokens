@@ -30,6 +30,8 @@ export class CopilotService {
   private session: CopilotSessionType | null = null;
   private started = false;
 
+  private workingDirectory: string | undefined;
+
   private constructor() {}
 
   static getInstance(): CopilotService {
@@ -37,6 +39,17 @@ export class CopilotService {
       CopilotService.instance = new CopilotService();
     }
     return CopilotService.instance;
+  }
+
+  setWorkingDirectory(dir: string): void {
+    if (dir && dir !== this.workingDirectory) {
+      this.workingDirectory = dir;
+      // Destroy current session so next message creates one with the new CWD
+      if (this.session) {
+        this.session.destroy().catch(() => {});
+        this.session = null;
+      }
+    }
   }
 
   async ensureStarted(): Promise<void> {
@@ -51,10 +64,14 @@ export class CopilotService {
   async ensureSession(): Promise<CopilotSessionType> {
     await this.ensureStarted();
     if (!this.session) {
-      this.session = await this.client!.createSession({
+      const opts: Record<string, unknown> = {
         model: 'gpt-4.1',
         streaming: true,
-      });
+      };
+      if (this.workingDirectory) {
+        opts.workingDirectory = this.workingDirectory;
+      }
+      this.session = await this.client!.createSession(opts as Parameters<CopilotClientType['createSession']>[0]);
     }
     return this.session;
   }

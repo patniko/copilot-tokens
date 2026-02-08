@@ -23,6 +23,7 @@ interface CwdAPI {
   set(dir: string): Promise<void>;
   getRecent(): Promise<string[]>;
   browse(): Promise<string | null>;
+  gitInfo(dir: string): Promise<{ isRepo: boolean; branch?: string }>;
 }
 
 declare global {

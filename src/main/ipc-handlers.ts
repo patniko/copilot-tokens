@@ -1,10 +1,17 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { execFile } from 'node:child_process';
 import { CopilotService } from './copilot-service';
 import { StatsService, SessionStats } from './stats-service';
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   const copilot = CopilotService.getInstance();
   const stats = new StatsService();
+
+  // Set initial CWD from persisted store
+  const savedCwd = stats.getCwd();
+  if (savedCwd) {
+    copilot.setWorkingDirectory(savedCwd);
+  }
 
   ipcMain.handle('copilot:sendMessage', async (_event, prompt: string, attachments?: { path: string }[]) => {
     try {
@@ -53,6 +60,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('cwd:set', (_event, dir: string) => {
     stats.setCwd(dir);
+    copilot.setWorkingDirectory(dir);
   });
 
   ipcMain.handle('cwd:getRecent', () => {
@@ -67,8 +75,22 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (!result.canceled && result.filePaths.length > 0) {
       const dir = result.filePaths[0];
       stats.setCwd(dir);
+      copilot.setWorkingDirectory(dir);
       return dir;
     }
     return null;
+  });
+
+  ipcMain.handle('cwd:gitInfo', async (_event, dir: string) => {
+    if (!dir) return { isRepo: false };
+    return new Promise<{ isRepo: boolean; branch?: string }>((resolve) => {
+      execFile('git', ['-C', dir, 'rev-parse', '--abbrev-ref', 'HEAD'], (err, stdout) => {
+        if (err) {
+          resolve({ isRepo: false });
+        } else {
+          resolve({ isRepo: true, branch: stdout.trim() });
+        }
+      });
+    });
   });
 }

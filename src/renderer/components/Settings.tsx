@@ -7,6 +7,7 @@ import type { Theme } from '../lib/themes';
 interface SettingsProps {
   isOpen: boolean;
   onClose: () => void;
+  onCwdChange?: (dir: string) => void;
 }
 
 const themeEmojis: Record<Theme['name'], string> = {
@@ -15,7 +16,7 @@ const themeEmojis: Record<Theme['name'], string> = {
   minimal: '✨',
 };
 
-export default function Settings({ isOpen, onClose }: SettingsProps) {
+export default function Settings({ isOpen, onClose, onCwdChange }: SettingsProps) {
   const { theme, setTheme, themes } = useTheme();
   const { play, enabled, setEnabled, volume, setVolume } = useSound();
   const [model, setModel] = useState('gpt-4o');
@@ -35,6 +36,7 @@ export default function Settings({ isOpen, onClose }: SettingsProps) {
     if (dir) {
       setCwd(dir);
       setRecentCwds(prev => [dir, ...prev.filter(d => d !== dir)].slice(0, 10));
+      onCwdChange?.(dir);
     }
   };
 
@@ -43,6 +45,7 @@ export default function Settings({ isOpen, onClose }: SettingsProps) {
     await window.cwdAPI.set(dir);
     setCwd(dir);
     setRecentCwds(prev => [dir, ...prev.filter(d => d !== dir)].slice(0, 10));
+    onCwdChange?.(dir);
   };
 
   return (

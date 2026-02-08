@@ -55,4 +55,7 @@ contextBridge.exposeInMainWorld('cwdAPI', {
   browse(): Promise<string | null> {
     return ipcRenderer.invoke('cwd:browse');
   },
+  gitInfo(dir: string): Promise<{ isRepo: boolean; branch?: string }> {
+    return ipcRenderer.invoke('cwd:gitInfo', dir);
+  },
 });
