@@ -86,14 +86,17 @@ body {
   background: var(--text-secondary);
 }
 
-/* Subtle logo bounce + flip for active agent */
+/* Logo jump-and-flip for active agent */
 @keyframes logo-bounce {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  40% { transform: translateY(-5px) rotate(180deg); }
-  60% { transform: translateY(-3px) rotate(360deg); }
+  0% { transform: translateY(0) rotate(0deg); }
+  30% { transform: translateY(-6px) rotate(120deg); }
+  50% { transform: translateY(-8px) rotate(240deg); }
+  70% { transform: translateY(-6px) rotate(360deg); }
+  85% { transform: translateY(0) rotate(360deg); }
+  100% { transform: translateY(0) rotate(360deg); }
 }
 .logo-bounce {
-  animation: logo-bounce 1.2s ease-in-out infinite;
+  animation: logo-bounce 1.4s ease-in-out infinite;
 }
 
 /* YOLO mode activation flash */
@@ -123,4 +126,30 @@ body {
   55% { transform: scale(1.05); }
   70% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.5); }
+}
+
+/* YOLO deactivation — retreating to safety */
+.yolo-cool {
+  animation: yolo-cool-bg 1.5s ease-out forwards;
+}
+.yolo-cool-text {
+  animation: yolo-cool-text 1.5s ease-out forwards;
+  color: var(--accent-blue);
+  text-shadow:
+    0 0 15px rgba(59, 130, 246, 0.6),
+    0 0 30px rgba(59, 130, 246, 0.3);
+  letter-spacing: 0.1em;
+}
+@keyframes yolo-cool-bg {
+  0% { background: rgba(59, 130, 246, 0.2); }
+  30% { background: rgba(59, 130, 246, 0.1); }
+  100% { background: transparent; }
+}
+@keyframes yolo-cool-text {
+  0% { opacity: 0; transform: scale(1.2) translateY(-10px); }
+  15% { opacity: 1; transform: scale(1) translateY(0); }
+  35% { transform: scale(0.95) translateY(2px); }
+  50% { opacity: 1; transform: scale(0.9) translateY(5px); }
+  75% { opacity: 0.7; transform: scale(0.85) translateY(8px); }
+  100% { opacity: 0; transform: scale(0.7) translateY(20px); }
 }
