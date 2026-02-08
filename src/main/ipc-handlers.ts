@@ -157,9 +157,46 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle('git:commit', async (_event, message: string, _files: string[]) => {
-    // TODO: Implement git commit via child_process
-    console.log(`[IPC] git:commit: ${message}`);
-    return { success: false, hash: undefined };
+    const cwd = stats.getCwd();
+    if (!cwd) return { success: false, hash: undefined };
+
+    // Stage all changes, then commit
+    return new Promise<{ success: boolean; hash?: string }>((resolve) => {
+      execFile('git', ['-C', cwd, 'add', '-A'], (addErr) => {
+        if (addErr) {
+          console.error('[git:commit] add failed:', addErr);
+          resolve({ success: false });
+          return;
+        }
+        execFile('git', ['-C', cwd, 'commit', '-m', message], (commitErr, stdout) => {
+          if (commitErr) {
+            console.error('[git:commit] commit failed:', commitErr);
+            resolve({ success: false });
+            return;
+          }
+          // Extract short hash from output like "[main abc1234] message"
+          const hashMatch = stdout.match(/\[[\w/-]+ ([a-f0-9]+)\]/);
+          resolve({ success: true, hash: hashMatch?.[1] });
+        });
+      });
+    });
+  });
+
+  ipcMain.handle('git:diff', async () => {
+    const cwd = stats.getCwd();
+    if (!cwd) return '';
+    return new Promise<string>((resolve) => {
+      execFile('git', ['-C', cwd, 'diff', 'HEAD'], { maxBuffer: 1024 * 1024 * 5 }, (err, stdout) => {
+        if (err) {
+          // Try without HEAD (new repo)
+          execFile('git', ['-C', cwd, 'diff'], { maxBuffer: 1024 * 1024 * 5 }, (err2, stdout2) => {
+            resolve(err2 ? '' : stdout2);
+          });
+          return;
+        }
+        resolve(stdout);
+      });
+    });
   });
 
   ipcMain.handle('cwd:get', () => {
@@ -262,6 +299,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('model:list', async () => {
     return copilot.listModels();
+  });
+
+  ipcMain.handle('model:refresh', async () => {
+    return copilot.refreshModels();
   });
 
   // ── Auth ──

@@ -336,6 +336,16 @@ export default function App() {
                   {availableModels.length === 0 && (
                     <div className="px-3 py-2 text-xs text-[var(--text-secondary)]">Loading…</div>
                   )}
+                  <button
+                    onClick={() => {
+                      window.modelAPI?.refresh().then((models) => {
+                        setAvailableModels(models);
+                      }).catch(() => {});
+                    }}
+                    className="w-full text-left px-3 py-2 text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer border-t border-[var(--border-color)] flex items-center gap-1.5"
+                  >
+                    🔄 Refresh models
+                  </button>
                 </div>
               </>
             )}
@@ -435,7 +445,7 @@ export default function App() {
               <TokenDashboard key={resetKey} inputTokenCount={inputTokens} contextWindow={availableModels.find(m => m.id === currentModel)?.contextWindow} onStatsUpdate={handleStatsUpdate} />
             </div>
             <div className="shrink-0">
-              <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} />
+              <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} />
             </div>
           </aside>
 

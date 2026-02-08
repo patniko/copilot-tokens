@@ -34,6 +34,7 @@ interface StatsAPI {
 
 interface GitAPI {
   commit(message: string, files: string[]): Promise<{ success: boolean; hash?: string }>;
+  diff(): Promise<string>;
 }
 
 interface CwdAPI {
@@ -55,6 +56,7 @@ interface ModelAPI {
   get(): Promise<string>;
   set(model: string): Promise<void>;
   list(): Promise<{ id: string; name: string; contextWindow: number }[]>;
+  refresh(): Promise<{ id: string; name: string; contextWindow: number }[]>;
 }
 
 interface McpAPI {

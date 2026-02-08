@@ -6,11 +6,12 @@ import { useSound } from '../hooks/useSound';
 interface CommitButtonProps {
   changedFiles: string[];
   visible: boolean;
+  onSendFeedback?: (feedback: string) => void;
 }
 
-type ModalStep = 'reels' | 'editor' | 'committing' | 'success' | 'error';
+type ModalStep = 'reels' | 'editor' | 'diff' | 'committing' | 'success' | 'error';
 
-export default function CommitButton({ changedFiles, visible }: CommitButtonProps) {
+export default function CommitButton({ changedFiles, visible, onSendFeedback }: CommitButtonProps) {
   const [modalOpen, setModalOpen] = useState(false);
 
   return (
@@ -44,6 +45,7 @@ export default function CommitButton({ changedFiles, visible }: CommitButtonProp
           <CommitModal
             changedFiles={changedFiles}
             onClose={() => setModalOpen(false)}
+            onSendFeedback={onSendFeedback}
           />
         )}
       </AnimatePresence>
@@ -54,15 +56,19 @@ export default function CommitButton({ changedFiles, visible }: CommitButtonProp
 interface CommitModalProps {
   changedFiles: string[];
   onClose: () => void;
+  onSendFeedback?: (feedback: string) => void;
 }
 
-function CommitModal({ changedFiles, onClose }: CommitModalProps) {
+function CommitModal({ changedFiles, onClose, onSendFeedback }: CommitModalProps) {
   const { play } = useSound();
   const [step, setStep] = useState<ModalStep>('reels');
   const [lockedCount, setLockedCount] = useState(0);
   const [message, setMessage] = useState('');
   const [commitHash, setCommitHash] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [diffContent, setDiffContent] = useState('');
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [feedback, setFeedback] = useState('');
   const closingRef = useRef(false);
 
   // Reel animation: lock files one by one
@@ -133,7 +139,7 @@ function CommitModal({ changedFiles, onClose }: CommitModalProps) {
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.5, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-        className="glass-card p-6 w-full max-w-[500px] flex flex-col gap-4"
+        className="glass-card p-6 w-full max-w-[700px] flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-[var(--accent-gold)] text-center tracking-wider">
@@ -197,9 +203,124 @@ function CommitModal({ changedFiles, onClose }: CommitModalProps) {
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
               {changedFiles.length} file{changedFiles.length !== 1 ? 's' : ''} changed
             </p>
+            <div className="flex gap-2 justify-between">
+              <button
+                onClick={async () => {
+                  setDiffLoading(true);
+                  setStep('diff');
+                  const d = await window.gitAPI.diff();
+                  setDiffContent(d);
+                  setDiffLoading(false);
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition-opacity hover:opacity-80"
+                style={{
+                  backgroundColor: 'var(--bg-secondary)',
+                  color: 'var(--accent-blue)',
+                  border: '1px solid var(--border-color)',
+                }}
+              >
+                Review Changes
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition-opacity hover:opacity-80"
+                  style={{
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                >
+                  CANCEL
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  className="px-4 py-2 rounded-lg text-sm font-bold text-black cursor-pointer transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: 'var(--accent-green)' }}
+                >
+                  CONFIRM
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Step 2b: Diff viewer */}
+        {step === 'diff' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col gap-3"
+          >
+            {diffLoading ? (
+              <div className="flex items-center justify-center py-8 text-sm text-[var(--text-secondary)]">
+                Loading diff…
+              </div>
+            ) : (
+              <pre
+                className="text-xs font-mono overflow-auto rounded-lg p-3 max-h-[50vh]"
+                style={{ backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)' }}
+              >
+                {diffContent.split('\n').map((line, i) => {
+                  let color = 'var(--text-secondary)';
+                  let bg = 'transparent';
+                  if (line.startsWith('+') && !line.startsWith('+++')) {
+                    color = 'var(--accent-green)';
+                    bg = 'rgba(63,185,80,0.08)';
+                  } else if (line.startsWith('-') && !line.startsWith('---')) {
+                    color = 'var(--accent-red)';
+                    bg = 'rgba(248,81,73,0.08)';
+                  } else if (line.startsWith('@@')) {
+                    color = 'var(--accent-purple)';
+                  } else if (line.startsWith('diff ') || line.startsWith('index ')) {
+                    color = 'var(--text-secondary)';
+                  }
+                  return (
+                    <div key={i} style={{ color, backgroundColor: bg }}>{line || ' '}</div>
+                  );
+                })}
+              </pre>
+            )}
+
+            {/* Feedback textarea */}
+            {onSendFeedback && (
+              <div className="flex gap-2">
+                <input
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  placeholder="Send feedback to chat…"
+                  className="flex-1 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2"
+                  style={{
+                    backgroundColor: 'var(--bg-primary)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && feedback.trim()) {
+                      onSendFeedback(feedback.trim());
+                      onClose();
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (feedback.trim()) {
+                      onSendFeedback(feedback.trim());
+                      onClose();
+                    }
+                  }}
+                  disabled={!feedback.trim()}
+                  className="px-3 py-2 rounded-lg text-sm font-bold cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-40"
+                  style={{ backgroundColor: 'var(--accent-purple)', color: 'white' }}
+                >
+                  Send
+                </button>
+              </div>
+            )}
+
             <div className="flex gap-2 justify-end">
               <button
-                onClick={onClose}
+                onClick={() => setStep('editor')}
                 className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition-opacity hover:opacity-80"
                 style={{
                   backgroundColor: 'var(--bg-secondary)',
@@ -207,7 +328,7 @@ function CommitModal({ changedFiles, onClose }: CommitModalProps) {
                   border: '1px solid var(--border-color)',
                 }}
               >
-                CANCEL
+                Back
               </button>
               <button
                 onClick={handleConfirm}

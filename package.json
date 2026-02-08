@@ -33,8 +33,10 @@
     "electron-store": "^11.0.2",
     "motion": "^12.33.0",
     "react": "^19.2.4",
+    "react-diff-view": "^3.3.2",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "unidiff": "^1.0.4"
   }
 }

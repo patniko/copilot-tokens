@@ -125,6 +125,13 @@ export class CopilotService {
     }));
   }
 
+  async refreshModels(): Promise<{ id: string; name: string; contextWindow: number }[]> {
+    await this.ensureStarted();
+    // Clear SDK's internal model cache to force a fresh fetch
+    (this.client as unknown as { modelsCache: unknown }).modelsCache = null;
+    return this.listModels();
+  }
+
   async ensureStarted(): Promise<void> {
     if (!this.started) {
       const { CopilotClient } = await loadSDK();

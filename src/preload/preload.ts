@@ -94,6 +94,9 @@ contextBridge.exposeInMainWorld('gitAPI', {
   commit(message: string, files: string[]): Promise<{ success: boolean; hash?: string }> {
     return ipcRenderer.invoke('git:commit', message, files);
   },
+  diff(): Promise<string> {
+    return ipcRenderer.invoke('git:diff');
+  },
 });
 
 contextBridge.exposeInMainWorld('utilAPI', {
@@ -123,6 +126,9 @@ contextBridge.exposeInMainWorld('modelAPI', {
   },
   list(): Promise<{ id: string; name: string; contextWindow: number }[]> {
     return ipcRenderer.invoke('model:list');
+  },
+  refresh(): Promise<{ id: string; name: string; contextWindow: number }[]> {
+    return ipcRenderer.invoke('model:refresh');
   },
 });
 
