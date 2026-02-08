@@ -16,11 +16,11 @@ export default function GenericToolTile({ title, data, isRunning, success, error
 
   return (
     <div
-      className="glass-card w-full p-4"
+      className="glass-card w-full p-4 overflow-hidden"
       style={{ borderLeft: `4px solid ${borderColor}` }}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-3 min-w-0">
         {isRunning ? (
           <span style={{ animation: 'spin-icon 1s linear infinite', display: 'inline-block' }}>⚙️</span>
         ) : success === false || error ? (

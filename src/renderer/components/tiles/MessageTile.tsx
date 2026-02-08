@@ -75,8 +75,8 @@ function renderContent(content: string): ReactNode[] {
 
 export default function MessageTile({ content, isStreaming }: MessageTileProps) {
   return (
-    <div className="w-full text-left" style={{ color: 'var(--text-primary)' }}>
-      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
+    <div className="w-full text-left overflow-hidden" style={{ color: 'var(--text-primary)' }}>
+      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.7 }}>
         {renderContent(content)}
         {isStreaming && (
           <span

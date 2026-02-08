@@ -82,14 +82,14 @@ export default function App() {
         {/* Main Content */}
         <main className="flex flex-1 overflow-hidden">
           {/* Token Dashboard (Left Panel) */}
-          <aside className="w-64 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] p-4 flex flex-col gap-4 overflow-y-auto">
+          <aside className="w-64 shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] p-4 flex flex-col gap-4 overflow-y-auto">
             <h2 className="text-sm uppercase tracking-wider text-[var(--text-secondary)]">Token Dashboard</h2>
             <TokenDashboard inputTokenCount={inputTokens} onStatsUpdate={handleStatsUpdate} />
             <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} />
           </aside>
 
           {/* Reel / Conversation Area (Center) */}
-          <section className="flex-1 flex flex-col">
+          <section className="flex-1 min-w-0 flex flex-col overflow-hidden">
             <ReelArea userPrompt={userPrompt} onUsage={handleUsage} />
 
             {/* Prompt Bar (Bottom) */}

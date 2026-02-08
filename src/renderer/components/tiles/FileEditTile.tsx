@@ -30,11 +30,11 @@ export default function FileEditTile({ path, diff, isRunning }: FileEditTileProp
 
   return (
     <div
-      className="glass-card w-full p-4"
+      className="glass-card w-full p-4 overflow-hidden"
       style={{ borderLeft: '4px solid var(--accent-blue)' }}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-3 min-w-0">
         {isRunning ? (
           <motion.span
             animate={{ rotate: 360 }}

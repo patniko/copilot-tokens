@@ -15,7 +15,7 @@ export default function FileReadTile({ path, content, isRunning }: FileReadTileP
 
   return (
     <div
-      className="glass-card w-full p-4"
+      className="glass-card w-full p-4 overflow-hidden"
       style={{ borderLeft: '4px solid var(--accent-purple)' }}
     >
       {/* Header */}

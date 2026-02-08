@@ -20,7 +20,7 @@ export default function BashTile({ command, output, isRunning, progress, success
 
   return (
     <div
-      className="glass-card w-full p-4"
+      className="glass-card w-full p-4 overflow-hidden"
       style={{ borderLeft: `4px solid ${borderColor}` }}
     >
       {/* Header */}
@@ -44,7 +44,7 @@ export default function BashTile({ command, output, isRunning, progress, success
 
       {/* Command */}
       <div
-        className="font-mono text-sm mb-2"
+        className="font-mono text-sm mb-2 break-all"
         style={{ color: 'var(--accent-green)' }}
       >
         $ {command}
@@ -60,7 +60,7 @@ export default function BashTile({ command, output, isRunning, progress, success
       {/* Output */}
       {lines.length > 0 && (
         <motion.div
-          className="font-mono text-xs mt-2"
+          className="font-mono text-xs mt-2 overflow-x-auto"
           style={{ color: 'var(--text-secondary)' }}
           initial="hidden"
           animate="visible"
