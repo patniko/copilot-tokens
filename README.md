@@ -26,27 +26,27 @@ Copilot Tokens wraps the full power of GitHub Copilot's agentic coding assistant
 ### Code Review
 Watch the agent review code changes, provide feedback, and the full tool execution pipeline in action.
 
-https://github.com/user-attachments/assets/review.mp4
+https://github.com/user-attachments/assets/50c1a7e9-4c68-4fc7-a6ea-5ac5b9bc5245
 
 ### YOLO Mode
 One click to skip all permission prompts. The satisfying toggle, the flash — and then the agent runs free.
 
-https://github.com/user-attachments/assets/yolo.mp4
+https://github.com/user-attachments/assets/9114175d-fdfa-49ac-9e05-70f0424dd5c2
 
 ### Achievements & Leveling
 Hit milestones, earn badges, and level up across 5 categories. Every session adds to your progress.
 
-https://github.com/user-attachments/assets/achievements.mp4
+https://github.com/user-attachments/assets/aebbbfef-adf1-4698-952e-d364885c73ba
 
 ### Settings & SDK Features
 Toggle SDK capabilities on and off — reasoning chains, custom tools, infinite sessions, hooks, and more. All configurable from the Settings panel.
 
-https://github.com/user-attachments/assets/settings.mp4
+https://github.com/user-attachments/assets/eb9cf6c9-538d-4dc9-99af-94f7f091c104
 
 ### The Million Token Club
 What happens when you hit 1,000,000 tokens? Find out.
 
-https://github.com/user-attachments/assets/1million.mp4
+https://github.com/user-attachments/assets/f5ace29b-541d-4e67-9185-b7786d96e9b1
 
 ---
 
