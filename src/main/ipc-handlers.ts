@@ -42,22 +42,36 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Permission bridge: main → renderer → main
   const permissions = new PermissionService();
-  let pendingPermission: { resolve: (decision: 'allow' | 'deny' | 'always') => void } | null = null;
+  let pendingPermission: { resolve: (decision: 'allow' | 'deny' | 'always') => void; timeout: ReturnType<typeof setTimeout> } | null = null;
 
   copilot.setPermissionHandler(async (request) => {
     const cwd = stats.getCwd();
     const evalResult = permissions.evaluate(request, cwd);
     if (evalResult === 'allow') return 'allow';
 
+    // Reject any previous pending request before creating a new one
+    if (pendingPermission) {
+      clearTimeout(pendingPermission.timeout);
+      pendingPermission.resolve('deny');
+      pendingPermission = null;
+    }
+
     // Need to ask user
     return new Promise<'allow' | 'deny' | 'always'>((resolve) => {
-      pendingPermission = { resolve };
+      const timeout = setTimeout(() => {
+        if (pendingPermission) {
+          pendingPermission = null;
+          resolve('deny');
+        }
+      }, 60_000);
+      pendingPermission = { resolve, timeout };
       mainWindow.webContents.send('copilot:permissionRequest', { ...request, cwd });
     });
   });
 
   ipcMain.handle('copilot:permissionResponse', (_event, decision: 'allow' | 'deny' | 'always') => {
     if (pendingPermission) {
+      clearTimeout(pendingPermission.timeout);
       pendingPermission.resolve(decision);
       pendingPermission = null;
     }
@@ -366,11 +380,24 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // ── Ask User (user input request/response bridge) ──
 
-  let pendingUserInput: { resolve: (response: { answer: string; wasFreeform: boolean }) => void } | null = null;
+  let pendingUserInput: { resolve: (response: { answer: string; wasFreeform: boolean }) => void; timeout: ReturnType<typeof setTimeout> } | null = null;
 
   copilot.setUserInputHandler(async (request) => {
+    // Reject any previous pending request before creating a new one
+    if (pendingUserInput) {
+      clearTimeout(pendingUserInput.timeout);
+      pendingUserInput.resolve({ answer: '', wasFreeform: true });
+      pendingUserInput = null;
+    }
+
     return new Promise((resolve) => {
-      pendingUserInput = { resolve };
+      const timeout = setTimeout(() => {
+        if (pendingUserInput) {
+          pendingUserInput = null;
+          resolve({ answer: '', wasFreeform: true });
+        }
+      }, 60_000);
+      pendingUserInput = { resolve, timeout };
       mainWindow.webContents.send('copilot:askUserRequest', {
         question: request.question,
         choices: request.choices,
@@ -381,6 +408,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('copilot:askUserResponse', (_event, answer: string, wasFreeform: boolean) => {
     if (pendingUserInput) {
+      clearTimeout(pendingUserInput.timeout);
       pendingUserInput.resolve({ answer, wasFreeform });
       pendingUserInput = null;
     }
