@@ -42,6 +42,7 @@ export default function SessionReplay({ sessionTimestamp, onClose }: SessionRepl
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (sessionTimestamp === null) { setLog(null); return; }
     window.statsAPI?.getSessionEventLog(sessionTimestamp).then((l) => {
       setLog(l ?? null);

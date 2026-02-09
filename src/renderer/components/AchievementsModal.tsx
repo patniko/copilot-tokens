@@ -71,6 +71,7 @@ export default function AchievementsModal({ isOpen, onClose, onReplaySession, in
 
   // Reset tab when opening
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isOpen) setTab(initialTab);
   }, [isOpen, initialTab]);
 

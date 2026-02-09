@@ -24,6 +24,7 @@ function normalizeNewlines(text: string): string {
 
   // Restore code blocks
   let i = 0;
+  // eslint-disable-next-line no-control-regex
   normalized = normalized.replace(new RegExp(placeholder.replace(/\x00/g, '\\x00'), 'g'), () => blocks[i++]);
 
   return normalized;

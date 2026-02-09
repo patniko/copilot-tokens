@@ -49,7 +49,7 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
 
   // Listen for session.idle to stop generating and drain queue
   const queueRef = useRef(queue);
-  queueRef.current = queue;
+  useEffect(() => { queueRef.current = queue; });
   useEffect(() => {
     if (!window.copilotAPI?.onEvent) return;
     const cleanup = window.copilotAPI.onEvent((event: unknown) => {

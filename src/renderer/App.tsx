@@ -139,7 +139,9 @@ export default function App() {
       });
     }
     if (window.modelAPI) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setModelsLoading(true);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setModelsError(null);
       window.modelAPI.list().then((models) => {
         setAvailableModels(models);

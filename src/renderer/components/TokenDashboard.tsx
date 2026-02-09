@@ -62,6 +62,7 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
   // Sync inputTokenCount prop
   useEffect(() => {
     if (inputTokenCount != null) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStats((prev) => ({ ...prev, inputTokens: inputTokenCount }));
     }
   }, [inputTokenCount]);
