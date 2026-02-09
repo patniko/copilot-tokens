@@ -15,6 +15,8 @@ interface CopilotAPI {
   clearPermissionRules(): Promise<void>;
   setYoloMode(enabled: boolean): Promise<void>;
   getYoloMode(): Promise<boolean>;
+  onAskUserRequest(callback: (request: { question: string; choices?: string[]; allowFreeform?: boolean }) => void): () => void;
+  respondAskUser(answer: string, wasFreeform: boolean): void;
 }
 
 interface StatsAPI {
@@ -70,6 +72,23 @@ interface McpAPI {
   list(): Promise<{ name: string; type: string; command: string }[]>;
 }
 
+interface FeaturesAPI {
+  get(): Promise<{ customTools: boolean; askUser: boolean; reasoning: boolean; infiniteSessions: boolean; hooks: boolean; customAgents: boolean; sessionEvents: boolean }>;
+  set(features: { customTools: boolean; askUser: boolean; reasoning: boolean; infiniteSessions: boolean; hooks: boolean; customAgents: boolean; sessionEvents: boolean }): Promise<void>;
+  getReasoningEffort(): Promise<string | null>;
+  setReasoningEffort(effort: string | null): Promise<void>;
+}
+
+interface SessionsAPI {
+  list(): Promise<{ sessionId: string; startTime: string; modifiedTime: string; summary?: string }[]>;
+  resume(sessionId: string, panelId?: string): Promise<void>;
+}
+
+interface AgentsAPI {
+  get(): Promise<{ name: string; displayName?: string; description?: string; tools?: string[] | null; prompt: string }[]>;
+  set(agents: { name: string; displayName?: string; description?: string; tools?: string[] | null; prompt: string }[]): Promise<void>;
+}
+
 interface PackAPI {
   listMilestonePacks(): Promise<MilestonePack[]>;
   saveMilestonePack(pack: MilestonePack): Promise<void>;
@@ -111,6 +130,9 @@ declare global {
     packAPI: PackAPI;
     settingsAPI: SettingsAPI;
     authAPI: AuthAPI;
+    featuresAPI: FeaturesAPI;
+    sessionsAPI: SessionsAPI;
+    agentsAPI: AgentsAPI;
   }
 }
 

@@ -162,6 +162,9 @@ export default function App() {
   const refreshGitInfo = useCallback((dir: string) => {
     setCwd(dir);
     if (window.cwdAPI) {
+      // Sync CWD to main process — this destroys all sessions so they
+      // pick up the new working directory on next message.
+      window.cwdAPI.set(dir);
       window.cwdAPI.gitInfo(dir).then((info) => {
         setGitBranch(info.isRepo ? (info.branch ?? null) : null);
       });
@@ -605,6 +608,15 @@ export default function App() {
                   }
                 }}
                 onClose={() => setSessionBrowserOpen(false)}
+                onResumeSDK={async (sessionId) => {
+                  setSessionBrowserOpen(false);
+                  handleReset();
+                  try {
+                    await window.sessionsAPI?.resume(sessionId, 'main');
+                  } catch (err) {
+                    console.error('Failed to resume session:', err);
+                  }
+                }}
               />
             ) : (
               <SplitLayout

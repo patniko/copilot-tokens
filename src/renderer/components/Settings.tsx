@@ -4,7 +4,17 @@ import { useTheme } from '../hooks/useTheme';
 import { useSound } from '../hooks/useSound';
 import type { Theme } from '../lib/themes';
 
-type SettingsTab = 'general' | 'prompt';
+type SettingsTab = 'general' | 'prompt' | 'features';
+
+interface FeatureFlags {
+  customTools: boolean;
+  askUser: boolean;
+  reasoning: boolean;
+  infiniteSessions: boolean;
+  hooks: boolean;
+  customAgents: boolean;
+  sessionEvents: boolean;
+}
 
 interface SettingsProps {
   isOpen: boolean;
@@ -32,6 +42,19 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
   const [promptSaved, setPromptSaved] = useState(false);
   const [promptDirty, setPromptDirty] = useState(false);
 
+  // Feature flags state
+  const [features, setFeatures] = useState<FeatureFlags>({
+    customTools: true,
+    askUser: true,
+    reasoning: true,
+    infiniteSessions: true,
+    hooks: true,
+    customAgents: false,
+    sessionEvents: true,
+  });
+  const [featuresSaved, setFeaturesSaved] = useState(false);
+  const [reasoningEffort, setReasoningEffort] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isOpen) return;
     setTab('general');
@@ -53,6 +76,10 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
         setPromptSaved(false);
       });
     }
+    if (window.featuresAPI) {
+      window.featuresAPI.get().then(setFeatures);
+      window.featuresAPI.getReasoningEffort().then(setReasoningEffort);
+    }
   }, [isOpen]);
 
   const handleSavePrompt = async () => {
@@ -61,6 +88,23 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
     setPromptDirty(false);
     setPromptSaved(true);
     setTimeout(() => setPromptSaved(false), 2000);
+  };
+
+  const handleToggleFeature = async (key: keyof FeatureFlags) => {
+    const updated = { ...features, [key]: !features[key] };
+    setFeatures(updated);
+    if (window.featuresAPI) {
+      await window.featuresAPI.set(updated);
+      setFeaturesSaved(true);
+      setTimeout(() => setFeaturesSaved(false), 2000);
+    }
+  };
+
+  const handleReasoningEffortChange = async (effort: string | null) => {
+    setReasoningEffort(effort);
+    if (window.featuresAPI) {
+      await window.featuresAPI.setReasoningEffort(effort);
+    }
   };
 
   return (
@@ -100,6 +144,7 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
               <div className="flex border-b border-[var(--border-color)]">
                 {([
                   { id: 'general' as SettingsTab, label: 'General', icon: '🎨' },
+                  { id: 'features' as SettingsTab, label: 'SDK Features', icon: '⚡' },
                   { id: 'prompt' as SettingsTab, label: 'System Prompt', icon: '📝' },
                 ] as const).map((t) => (
                   <button
@@ -116,7 +161,6 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
                 ))}
               </div>
 
-              {/* Content */}
               <div className="flex-1 overflow-y-auto px-6 py-5">
                 {tab === 'general' ? (
                   <div className="flex flex-col gap-6">
@@ -247,6 +291,87 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
                         Changes take effect on next message
                       </p>
                     </section>
+                  </div>
+                ) : tab === 'features' ? (
+                  /* SDK Features Tab */
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <label className="block text-sm uppercase tracking-wider text-[var(--text-secondary)] mb-2">
+                        SDK Capabilities
+                      </label>
+                      <p className="text-xs text-[var(--text-secondary)] mb-4">
+                        Toggle Copilot SDK features on or off. Changes restart active sessions.
+                      </p>
+                    </div>
+
+                    {([
+                      { key: 'reasoning' as const, label: 'Reasoning Chain', icon: '🧠', desc: 'Show model thinking process in real-time' },
+                      { key: 'askUser' as const, label: 'Ask User (Interactive)', icon: '💬', desc: 'Agent can ask clarifying questions mid-task' },
+                      { key: 'customTools' as const, label: 'Native Tools', icon: '🔧', desc: 'Desktop notifications, clipboard, system info, etc.' },
+                      { key: 'infiniteSessions' as const, label: 'Infinite Sessions', icon: '♾️', desc: 'Auto-compaction keeps conversations alive forever' },
+                      { key: 'hooks' as const, label: 'Session Hooks', icon: '🪝', desc: 'Pre/post tool hooks, prompt validation, error recovery' },
+                      { key: 'customAgents' as const, label: 'Custom Agents', icon: '🤖', desc: 'Agent personas with tailored system prompts' },
+                      { key: 'sessionEvents' as const, label: 'Session Events', icon: '📡', desc: 'Error banners, compaction, model changes, shutdown reports' },
+                    ]).map(({ key, label, icon, desc }) => (
+                      <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)]">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-lg shrink-0">{icon}</span>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-[var(--text-primary)]">{label}</div>
+                            <div className="text-[11px] text-[var(--text-secondary)] truncate">{desc}</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleToggleFeature(key)}
+                          className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer shrink-0 ml-3 ${
+                            features[key] ? 'bg-green-500' : 'bg-gray-600'
+                          }`}
+                        >
+                          <motion.div
+                            className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
+                            animate={{ left: features[key] ? 26 : 2 }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                          />
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* Reasoning effort selector */}
+                    {features.reasoning && (
+                      <section className="mt-2">
+                        <label className="block text-sm uppercase tracking-wider text-[var(--text-secondary)] mb-2">
+                          Reasoning Effort
+                        </label>
+                        <div className="flex gap-2">
+                          {[
+                            { value: null, label: 'Auto' },
+                            { value: 'low', label: 'Low' },
+                            { value: 'medium', label: 'Medium' },
+                            { value: 'high', label: 'High' },
+                            { value: 'xhigh', label: 'Max' },
+                          ].map(({ value, label }) => (
+                            <button
+                              key={label}
+                              onClick={() => handleReasoningEffortChange(value)}
+                              className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                                reasoningEffort === value
+                                  ? 'border-[var(--accent-purple)] bg-[var(--accent-purple)]/10 text-[var(--accent-purple)]'
+                                  : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 text-[10px] text-[var(--text-secondary)]">
+                          Higher effort = deeper thinking, more tokens. Only works with reasoning-capable models.
+                        </p>
+                      </section>
+                    )}
+
+                    {featuresSaved && (
+                      <span className="text-xs text-[var(--accent-green)]">✓ Features updated — sessions restarted</span>
+                    )}
                   </div>
                 ) : (
                   /* System Prompt Tab */

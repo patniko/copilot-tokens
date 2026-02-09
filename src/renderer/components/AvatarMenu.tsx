@@ -170,16 +170,16 @@ export default function AvatarMenu({ onOpenSettings, onOpenAchievements, onOpenP
               <span>🎨</span> Personalization
             </button>
             <button
-              onClick={() => { setOpen(false); onOpenSettings(); }}
-              className="w-full px-4 py-2.5 text-left text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
-            >
-              <span>⚙️</span> Settings
-            </button>
-            <button
               onClick={() => { setOpen(false); onOpenAchievements('stats'); }}
               className="w-full px-4 py-2.5 text-left text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
             >
               <span>🏆</span> Achievements
+            </button>
+            <button
+              onClick={() => { setOpen(false); onOpenSettings(); }}
+              className="w-full px-4 py-2.5 text-left text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
+            >
+              <span>⚙️</span> Settings
             </button>
           </div>
         </>

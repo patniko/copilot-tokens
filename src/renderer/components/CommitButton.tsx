@@ -82,14 +82,16 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
     }
 
     let i = 0;
+    // Scale interval so the total reel animation stays under ~1s
+    const perFile = Math.min(200, Math.max(30, 800 / changedFiles.length));
     const interval = setInterval(() => {
       i++;
       setLockedCount(i);
       if (i >= changedFiles.length) {
         clearInterval(interval);
-        setTimeout(() => setStep('editor'), 400);
+        setTimeout(() => setStep('editor'), 300);
       }
-    }, 200);
+    }, perFile);
     return () => clearInterval(interval);
   }, [step, changedFiles.length]);
 
@@ -321,7 +323,7 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
                   style={{ color: 'var(--text-secondary)' }}
                   initial={{ opacity: 1, scale: 1 }}
                   animate={{ opacity: 0, scale: 0, y: -20 }}
-                  transition={{ delay: i * 0.05, duration: 0.4 }}
+                  transition={{ delay: Math.min(i * 0.02, 0.5), duration: 0.3 }}
                 >
                   {file}
                 </motion.span>

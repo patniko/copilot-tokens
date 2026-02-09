@@ -7,6 +7,9 @@ import type {
   UserMessage,
   AssistantMessage,
   ToolCallMessage,
+  ReasoningMessage,
+  AskUserMessage,
+  SessionEventMessage,
 } from '../lib/types';
 import {
   MessageTile,
@@ -15,6 +18,16 @@ import {
   FileReadTile,
   GenericToolTile,
   UserBubble,
+  ReasoningTile,
+  AskUserTile,
+  ErrorBanner,
+  ModelChangeBanner,
+  TruncationWarning,
+  CompactionBanner,
+  ShutdownReport,
+  TurnIndicator,
+  SkillBanner,
+  HookBanner,
 } from './tiles';
 import { partyBus, PartyEvents } from '../lib/party-bus';
 import { getTileRenderer } from '../lib/tile-registry';
@@ -52,7 +65,7 @@ function toolTypeFromName(toolName: string): ToolCallMessage['toolType'] {
 }
 
 // Tools that should be silently hidden (just update UI state, not shown as tiles)
-const HIDDEN_TOOLS = new Set(['report_intent', 'ask_user']);
+const HIDDEN_TOOLS = new Set(['report_intent']);
 
 /** Fields to skip when picking a human-readable subtitle from tool args */
 const TITLE_SKIP = new Set(['path', 'file', 'command', 'cmd', 'completed', 'success', '_toolName']);
@@ -83,6 +96,7 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastPromptRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
+  const currentReasoningIdRef = useRef<string | null>(null);
 
   // Replay initial events to restore a loaded session
   useEffect(() => {
@@ -357,14 +371,215 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
           setStreamSnippet('');
           partyBus.emit(PartyEvents.SESSION_IDLE);
           setMessages((prev) =>
+            prev.map((m) => {
+              if (m.type === 'assistant' && m.isStreaming) return { ...m, isStreaming: false };
+              if (m.type === 'reasoning' && m.isStreaming) return { ...m, isStreaming: false };
+              return m;
+            }),
+          );
+          currentAssistantIdRef.current = null;
+          currentReasoningIdRef.current = null;
+          setIntent(null);
+          break;
+        }
+
+        // ── Reasoning events ──
+        case 'assistant.reasoning_delta': {
+          setIsWaiting(false);
+          const { reasoningId, delta } = event as { type: string; reasoningId: string; delta: string };
+          setMessages((prev) => {
+            const existingIdx = prev.findIndex(m => m.type === 'reasoning' && (m as ReasoningMessage).reasoningId === reasoningId);
+            if (existingIdx >= 0) {
+              return prev.map((m, i) =>
+                i === existingIdx && m.type === 'reasoning'
+                  ? { ...m, content: m.content + delta }
+                  : m,
+              );
+            }
+            currentReasoningIdRef.current = reasoningId;
+            const msg: ReasoningMessage = {
+              id: generateId(),
+              type: 'reasoning',
+              reasoningId,
+              content: delta,
+              isStreaming: true,
+              timestamp: Date.now(),
+            };
+            return [...prev, msg];
+          });
+          break;
+        }
+
+        case 'assistant.reasoning': {
+          const { reasoningId } = event as { type: string; reasoningId: string };
+          setMessages((prev) =>
             prev.map((m) =>
-              m.type === 'assistant' && m.isStreaming
+              m.type === 'reasoning' && (m as ReasoningMessage).reasoningId === reasoningId
                 ? { ...m, isStreaming: false }
                 : m,
             ),
           );
+          currentReasoningIdRef.current = null;
+          break;
+        }
+
+        // ── Ask User events ──
+        case 'ask_user.request': {
+          const { question, choices, allowFreeform } = event as { type: string; question: string; choices?: string[]; allowFreeform?: boolean };
+          const msg: AskUserMessage = {
+            id: generateId(),
+            type: 'ask_user',
+            question,
+            choices,
+            allowFreeform,
+            responded: false,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
           currentAssistantIdRef.current = null;
-          setIntent(null);
+          break;
+        }
+
+        // ── Session events ──
+        case 'session.error': {
+          const ev = event as { type: string; errorType: string; message: string; statusCode?: number };
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'error',
+            data: { errorType: ev.errorType, message: ev.message, statusCode: ev.statusCode },
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          break;
+        }
+
+        case 'session.model_change': {
+          const ev = event as { type: string; previousModel?: string; newModel: string };
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'model_change',
+            data: { previousModel: ev.previousModel, newModel: ev.newModel },
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          break;
+        }
+
+        case 'session.truncation': {
+          const ev = event as { type: string; tokensRemoved: number; messagesRemoved: number };
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'truncation',
+            data: { tokensRemoved: ev.tokensRemoved, messagesRemoved: ev.messagesRemoved },
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          break;
+        }
+
+        case 'session.compaction_start': {
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'compaction_start',
+            data: {},
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          break;
+        }
+
+        case 'session.compaction_complete': {
+          const ev = event as { type: string; success: boolean; preTokens?: number; postTokens?: number; summary?: string };
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'compaction_complete',
+            data: { success: ev.success, preTokens: ev.preTokens, postTokens: ev.postTokens, summary: ev.summary },
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          break;
+        }
+
+        case 'session.shutdown': {
+          const ev = event as { type: string; totalRequests: number; totalApiDurationMs: number; linesAdded: number; linesRemoved: number; filesModified: string[]; modelMetrics: Record<string, unknown> };
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'shutdown',
+            data: ev,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          break;
+        }
+
+        case 'assistant.turn_start': {
+          const ev = event as { type: string; turnId: string };
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'turn_start',
+            data: { turnId: ev.turnId },
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          break;
+        }
+
+        case 'assistant.turn_end': {
+          const ev = event as { type: string; turnId: string };
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'turn_end',
+            data: { turnId: ev.turnId },
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          break;
+        }
+
+        case 'skill.invoked': {
+          const ev = event as { type: string; name: string; allowedTools?: string[] };
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'skill',
+            data: { name: ev.name, allowedTools: ev.allowedTools },
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          break;
+        }
+
+        case 'hook.start': {
+          const ev = event as { type: string; hookType: string };
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'hook_start',
+            data: { hookType: ev.hookType },
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          break;
+        }
+
+        case 'hook.end': {
+          const ev = event as { type: string; hookType: string; success: boolean };
+          const msg: SessionEventMessage = {
+            id: generateId(),
+            type: 'session_event',
+            eventType: 'hook_end',
+            data: { hookType: ev.hookType, success: ev.success },
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, msg]);
           break;
         }
       }
@@ -372,6 +587,23 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
 
     return unsubscribe;
   }, [onUsage, panelId]);
+
+  // Listen for SDK ask_user requests (only on main panel to avoid duplicates)
+  useEffect(() => {
+    if (!window.copilotAPI?.onAskUserRequest || panelId !== 'main') return;
+    return window.copilotAPI.onAskUserRequest((request) => {
+      const msg: AskUserMessage = {
+        id: generateId(),
+        type: 'ask_user',
+        question: request.question,
+        choices: request.choices,
+        allowFreeform: request.allowFreeform,
+        responded: false,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, msg]);
+    });
+  }, [panelId]);
 
   // Elapsed time timer while generating
   useEffect(() => {
@@ -482,6 +714,66 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
                     error={msg.data.error ? String(msg.data.error) : undefined}
                     progress={msg.data.progress ? String(msg.data.progress) : undefined}
                   />
+                )}
+                {msg.type === 'reasoning' && (
+                  <ReasoningTile
+                    content={msg.content}
+                    isStreaming={msg.isStreaming}
+                    reasoningId={msg.reasoningId}
+                  />
+                )}
+                {msg.type === 'ask_user' && (
+                  <AskUserTile
+                    question={msg.question}
+                    choices={msg.choices}
+                    allowFreeform={msg.allowFreeform}
+                    responded={msg.responded}
+                    selectedAnswer={msg.selectedAnswer}
+                    onRespond={(answer) => {
+                      setMessages((prev) =>
+                        prev.map((m) =>
+                          m.id === msg.id && m.type === 'ask_user'
+                            ? { ...m, responded: true, selectedAnswer: answer }
+                            : m,
+                        ),
+                      );
+                      window.copilotAPI?.respondAskUser(answer, !msg.choices?.includes(answer));
+                    }}
+                  />
+                )}
+                {msg.type === 'session_event' && msg.eventType === 'error' && (
+                  <ErrorBanner errorType={String(msg.data.errorType)} message={String(msg.data.message)} statusCode={msg.data.statusCode as number | undefined} />
+                )}
+                {msg.type === 'session_event' && msg.eventType === 'model_change' && (
+                  <ModelChangeBanner previousModel={msg.data.previousModel as string | undefined} newModel={String(msg.data.newModel)} />
+                )}
+                {msg.type === 'session_event' && msg.eventType === 'truncation' && (
+                  <TruncationWarning tokensRemoved={msg.data.tokensRemoved as number} messagesRemoved={msg.data.messagesRemoved as number} />
+                )}
+                {msg.type === 'session_event' && msg.eventType === 'compaction_start' && (
+                  <CompactionBanner phase="start" />
+                )}
+                {msg.type === 'session_event' && msg.eventType === 'compaction_complete' && (
+                  <CompactionBanner phase="complete" preTokens={msg.data.preTokens as number | undefined} postTokens={msg.data.postTokens as number | undefined} summary={msg.data.summary as string | undefined} />
+                )}
+                {msg.type === 'session_event' && msg.eventType === 'shutdown' && (
+                  <ShutdownReport
+                    totalRequests={msg.data.totalRequests as number}
+                    totalApiDurationMs={msg.data.totalApiDurationMs as number}
+                    linesAdded={msg.data.linesAdded as number}
+                    linesRemoved={msg.data.linesRemoved as number}
+                    filesModified={msg.data.filesModified as string[]}
+                    modelMetrics={msg.data.modelMetrics as Record<string, { requests: { count: number; cost: number }; usage: { inputTokens: number; outputTokens: number } }>}
+                  />
+                )}
+                {msg.type === 'session_event' && (msg.eventType === 'turn_start' || msg.eventType === 'turn_end') && (
+                  <TurnIndicator phase={msg.eventType === 'turn_start' ? 'start' : 'end'} turnId={String(msg.data.turnId)} />
+                )}
+                {msg.type === 'session_event' && msg.eventType === 'skill' && (
+                  <SkillBanner name={String(msg.data.name)} allowedTools={msg.data.allowedTools as string[] | undefined} />
+                )}
+                {msg.type === 'session_event' && (msg.eventType === 'hook_start' || msg.eventType === 'hook_end') && (
+                  <HookBanner hookType={String(msg.data.hookType)} phase={msg.eventType === 'hook_start' ? 'start' : 'end'} success={msg.data.success as boolean | undefined} />
                 )}
               </motion.div>
             );

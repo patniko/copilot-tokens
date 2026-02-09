@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getLevelTier } from '../lib/level-system';
 
@@ -7,6 +8,12 @@ interface LevelUpOverlayProps {
 }
 
 export default function LevelUpOverlay({ level, onComplete }: LevelUpOverlayProps) {
+  useEffect(() => {
+    if (level === null) return;
+    const timer = setTimeout(onComplete, 3500);
+    return () => clearTimeout(timer);
+  }, [level, onComplete]);
+
   if (level === null) return null;
   const tier = getLevelTier(level);
 

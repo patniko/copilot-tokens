@@ -50,6 +50,18 @@ contextBridge.exposeInMainWorld('copilotAPI', {
   getYoloMode(): Promise<boolean> {
     return ipcRenderer.invoke('copilot:getYoloMode');
   },
+  onAskUserRequest(callback: (request: { question: string; choices?: string[]; allowFreeform?: boolean }) => void): () => void {
+    const listener = (_ipcEvent: Electron.IpcRendererEvent, request: { question: string; choices?: string[]; allowFreeform?: boolean }) => {
+      callback(request);
+    };
+    ipcRenderer.on('copilot:askUserRequest', listener);
+    return () => {
+      ipcRenderer.removeListener('copilot:askUserRequest', listener);
+    };
+  },
+  respondAskUser(answer: string, wasFreeform: boolean): void {
+    ipcRenderer.invoke('copilot:askUserResponse', answer, wasFreeform);
+  },
 });
 
 contextBridge.exposeInMainWorld('statsAPI', {
@@ -136,6 +148,39 @@ contextBridge.exposeInMainWorld('utilAPI', {
 contextBridge.exposeInMainWorld('mcpAPI', {
   list(): Promise<{ name: string; type: string; command: string }[]> {
     return ipcRenderer.invoke('mcp:list');
+  },
+});
+
+contextBridge.exposeInMainWorld('featuresAPI', {
+  get(): Promise<{ customTools: boolean; askUser: boolean; reasoning: boolean; infiniteSessions: boolean; hooks: boolean; customAgents: boolean; sessionEvents: boolean }> {
+    return ipcRenderer.invoke('features:get');
+  },
+  set(features: { customTools: boolean; askUser: boolean; reasoning: boolean; infiniteSessions: boolean; hooks: boolean; customAgents: boolean; sessionEvents: boolean }): Promise<void> {
+    return ipcRenderer.invoke('features:set', features);
+  },
+  getReasoningEffort(): Promise<string | null> {
+    return ipcRenderer.invoke('features:getReasoningEffort');
+  },
+  setReasoningEffort(effort: string | null): Promise<void> {
+    return ipcRenderer.invoke('features:setReasoningEffort', effort);
+  },
+});
+
+contextBridge.exposeInMainWorld('sessionsAPI', {
+  list(): Promise<{ sessionId: string; startTime: string; modifiedTime: string; summary?: string }[]> {
+    return ipcRenderer.invoke('sessions:list');
+  },
+  resume(sessionId: string, panelId?: string): Promise<void> {
+    return ipcRenderer.invoke('sessions:resume', sessionId, panelId);
+  },
+});
+
+contextBridge.exposeInMainWorld('agentsAPI', {
+  get(): Promise<{ name: string; displayName?: string; description?: string; tools?: string[] | null; prompt: string }[]> {
+    return ipcRenderer.invoke('agents:get');
+  },
+  set(agents: { name: string; displayName?: string; description?: string; tools?: string[] | null; prompt: string }[]): Promise<void> {
+    return ipcRenderer.invoke('agents:set', agents);
   },
 });
 

@@ -326,6 +326,66 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }));
   });
 
+  // ── Features ──
+
+  ipcMain.handle('features:get', () => {
+    return copilot.getFeatures();
+  });
+
+  ipcMain.handle('features:set', (_event, features: import('./copilot-service').FeatureFlags) => {
+    copilot.setFeatures(features);
+  });
+
+  ipcMain.handle('features:getReasoningEffort', () => {
+    return copilot.getReasoningEffort();
+  });
+
+  ipcMain.handle('features:setReasoningEffort', (_event, effort: string | null) => {
+    copilot.setReasoningEffort(effort as 'low' | 'medium' | 'high' | 'xhigh' | null);
+  });
+
+  // ── Sessions (Infinite Sessions + Resume) ──
+
+  ipcMain.handle('sessions:list', async () => {
+    return copilot.listSessions();
+  });
+
+  ipcMain.handle('sessions:resume', async (_event, sessionId: string, panelId?: string) => {
+    return copilot.resumeSession(sessionId, panelId || 'main');
+  });
+
+  // ── Custom Agents ──
+
+  ipcMain.handle('agents:get', () => {
+    return copilot.getCustomAgents();
+  });
+
+  ipcMain.handle('agents:set', (_event, agents: { name: string; displayName?: string; description?: string; tools?: string[] | null; prompt: string }[]) => {
+    copilot.setCustomAgents(agents as import('@github/copilot-sdk').CustomAgentConfig[]);
+  });
+
+  // ── Ask User (user input request/response bridge) ──
+
+  let pendingUserInput: { resolve: (response: { answer: string; wasFreeform: boolean }) => void } | null = null;
+
+  copilot.setUserInputHandler(async (request) => {
+    return new Promise((resolve) => {
+      pendingUserInput = { resolve };
+      mainWindow.webContents.send('copilot:askUserRequest', {
+        question: request.question,
+        choices: request.choices,
+        allowFreeform: request.allowFreeform ?? true,
+      });
+    });
+  });
+
+  ipcMain.handle('copilot:askUserResponse', (_event, answer: string, wasFreeform: boolean) => {
+    if (pendingUserInput) {
+      pendingUserInput.resolve({ answer, wasFreeform });
+      pendingUserInput = null;
+    }
+  });
+
   ipcMain.handle('model:get', () => {
     return stats.getModel();
   });

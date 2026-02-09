@@ -101,7 +101,7 @@ body {
   line-height: 1.7;
   word-break: break-word;
 }
-.message-markdown p { margin: 0.4em 0; }
+.message-markdown p { margin: 0.2em 0; }
 .message-markdown h1, .message-markdown h2, .message-markdown h3 {
   font-weight: 700;
   margin: 0.6em 0 0.3em;
