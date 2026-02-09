@@ -21,6 +21,35 @@ Turn every AI interaction into a slot-machine experience — track tokens, hit m
 
 Copilot Tokens wraps the full power of GitHub Copilot's agentic coding assistant inside a desktop app that makes every session feel alive. It's not a toy — underneath the animations is a complete multi-panel AI coding environment with tool permissions, diff viewing, git integration, and session replay. The gamification layer sits on top, giving you real-time feedback on how you and the AI are working together.
 
+## See it in action
+
+### Code Review
+Watch the agent review code changes, provide feedback, and the full tool execution pipeline in action.
+
+https://github.com/user-attachments/assets/review.mp4
+
+### YOLO Mode
+One click to skip all permission prompts. The satisfying toggle, the flash — and then the agent runs free.
+
+https://github.com/user-attachments/assets/yolo.mp4
+
+### Achievements & Leveling
+Hit milestones, earn badges, and level up across 5 categories. Every session adds to your progress.
+
+https://github.com/user-attachments/assets/achievements.mp4
+
+### Settings & SDK Features
+Toggle SDK capabilities on and off — reasoning chains, custom tools, infinite sessions, hooks, and more. All configurable from the Settings panel.
+
+https://github.com/user-attachments/assets/settings.mp4
+
+### The Million Token Club
+What happens when you hit 1,000,000 tokens? Find out.
+
+https://github.com/user-attachments/assets/1million.mp4
+
+---
+
 ## ✨ Features
 
 ### 🤖 Full Copilot Agent
@@ -29,6 +58,16 @@ Copilot Tokens wraps the full power of GitHub Copilot's agentic coding assistant
 - Tool permission system with YOLO mode for the brave
 - Model selector with live context window tracking
 - MCP server support for extensible tool integrations
+- **Custom agents** — pick from presets or create your own personas with tailored system prompts
+
+### 🧠 SDK Feature Showcase
+Every feature toggleable from Settings — turn things on and off to match your preferences:
+- **Reasoning chains** — stream the model's chain-of-thought in a collapsible thinking panel with effort selector (low → max)
+- **Ask user flow** — the agent asks clarifying questions mid-task with interactive choice buttons
+- **Native tools** — desktop notifications, clipboard read/write, system info, app launching, sound playback via `defineTool()`
+- **Infinite sessions** — conversations never die; auto-compaction keeps the context window managed
+- **Session hooks** — pre/post tool hooks, prompt validation, error recovery, session summaries
+- **Session events** — error banners, model change notifications, truncation warnings, shutdown report cards
 
 ### 🎰 Live Token Dashboard
 - Real-time odometer counters for input tokens, output tokens, and totals
@@ -52,7 +91,7 @@ Every sound is synthesized at runtime — no audio files. Lever pulls, token tic
 
 ### 📼 Session Recording & Replay
 - Every session is automatically recorded — messages, tool calls, stats, and timing
-- Browse past sessions in the Session Browser
+- Browse past sessions or resume SDK sessions with full conversation history
 - Full replay with timeline scrubbing
 
 ### 🔒 Permission System
@@ -66,29 +105,40 @@ Every sound is synthesized at runtime — no audio files. Lever pulls, token tic
 ```
 src/
 ├── main/              Electron main process
-│   ├── copilot-service    SDK wrapper — sessions, streaming, models, MCP
+│   ├── copilot-service    SDK wrapper — sessions, streaming, tools, hooks, agents
 │   ├── permission-service Tool permission rules & evaluation
 │   ├── auth-service       GitHub OAuth Device Flow + gh CLI detection
 │   ├── stats-service      Lifetime stats, streaks, level progress
 │   └── pack-service       Custom milestone/sound/theme pack CRUD
 ├── preload/           Context-isolated bridge
-│   └── preload            Typed APIs: copilot, stats, git, auth, model, pack
+│   └── preload            13 typed APIs: copilot, stats, git, auth, model,
+│                          settings, features, sessions, agents, pack, mcp, cwd, util
 └── renderer/          React 19 + Tailwind 4 + Motion
     ├── App                Root — panels, modals, state orchestration
     ├── components/
-    │   ├── ReelArea           Animated chat message feed
+    │   ├── ReelArea           Animated chat feed (30+ event types)
     │   ├── TokenDashboard     Live counters & context progress
     │   ├── SplitLayout        Multi-panel with draggable dividers
     │   ├── PermissionDialog   Tool approval UI
+    │   ├── Settings           General, SDK Features, System Prompt tabs
+    │   ├── AgentPicker        Custom agent personas & presets
+    │   ├── HooksIndicator     Hook pipeline activity display
     │   ├── PackStudio         Theme/milestone/sound editor
-    │   ├── SessionBrowser     Past session explorer
+    │   ├── SessionBrowser     Past sessions + SDK session resume
     │   ├── DiffViewer         Unified diff rendering
-    │   └── tiles/             Per-tool UI components
+    │   └── tiles/             16 per-tool UI components
+    │       ├── ReasoningTile      Chain-of-thought streaming
+    │       ├── AskUserTile        Interactive choice buttons
+    │       ├── SessionEventTiles  Error/compaction/shutdown banners
+    │       ├── NativeToolTiles    Notification/clipboard/system info
+    │       ├── SqlTile, MemoryTile, SubagentTile, SkillTile
+    │       └── BashTile, FileEditTile, FileReadTile, WebFetchTile...
     └── lib/
         ├── level-system       100-level polynomial progression
         ├── milestones         Threshold-based achievement triggers
         ├── sound-manager      Web Audio procedural synthesis
         ├── themes             CSS variable-driven theming
+        ├── tile-registry      Plugin-style tile registration
         └── party-bus          Cross-component event pub/sub
 ```
 
@@ -98,7 +148,8 @@ src/
 - **No external audio files** — all sounds are procedurally generated with the Web Audio API.
 - **CSS variable theming** — themes swap a set of CSS custom properties; components reference variables, never hard-coded colors.
 - **Event-driven gamification** — a lightweight pub/sub bus (PartyBus) decouples game events from UI, so milestones, level-ups, and celebrations trigger without tight coupling.
-- **Persistent state** — auth, permissions, stats, packs, and level progress all persist via `electron-store`.
+- **Everything is toggleable** — every SDK feature (reasoning, tools, hooks, agents, sessions) can be turned on/off from Settings without restarting the app.
+- **Persistent state** — auth, permissions, stats, packs, feature flags, and level progress all persist via `electron-store`.
 
 ## Getting Started
 
@@ -129,6 +180,12 @@ npm run make
 
 ## Extending
 
+### Custom Tool Tiles
+
+1. Create a component in `src/renderer/components/tiles/`
+2. Export from the barrel `index.ts`
+3. Register in `src/renderer/lib/register-tiles.ts` with the tool name as key
+
 ### Custom Themes
 
 Create themes in the Pack Studio or register them programmatically. A theme is a set of color tokens and effect flags:
@@ -147,11 +204,13 @@ Create themes in the Pack Studio or register them programmatically. A theme is a
 
 Define milestones that trigger at token, file, or line thresholds with visual effects (sparkle, banner, confetti, jackpot, mega) and sound cues.
 
-### Custom Tool Tiles
+### Custom Agents
 
-1. Create a component in `src/renderer/components/tiles/`
-2. Export from the barrel `index.ts`
-3. Register in `src/renderer/lib/register-tiles.ts` with the tool name as key
+Create agent personas from the Agent Picker or via the `agentsAPI`. Each agent gets a name, description, system prompt, and optional tool restrictions.
+
+### Native Tools via `defineTool()`
+
+The app registers Electron-native tools that the AI agent can call: desktop notifications, clipboard read/write, system info, URL opening, and sound playback. Add your own in `buildNativeTools()` in `copilot-service.ts`.
 
 ## Tech Stack
 

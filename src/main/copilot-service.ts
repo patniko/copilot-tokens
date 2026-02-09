@@ -298,7 +298,7 @@ const settingsStore = new Store<SettingsStoreSchema>({
   defaults: {
     systemPrompt: { mode: 'append', content: '' },
     features: defaultFeatures,
-    reasoningEffort: null,
+    reasoningEffort: 'medium',
     customAgents: [],
   },
 });
