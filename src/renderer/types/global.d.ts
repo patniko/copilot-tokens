@@ -103,9 +103,16 @@ interface PackAPI {
   deleteThemePack(id: string): Promise<void>;
 }
 
+type CliMode =
+  | { type: 'bundled' }
+  | { type: 'installed' }
+  | { type: 'remote'; url: string };
+
 interface SettingsAPI {
   getSystemPrompt(): Promise<{ mode: 'append' | 'replace'; content: string }>;
   setSystemPrompt(config: { mode: 'append' | 'replace'; content: string }): Promise<void>;
+  getCliMode(): Promise<CliMode>;
+  setCliMode(mode: CliMode): Promise<void>;
 }
 
 interface AuthAPI {

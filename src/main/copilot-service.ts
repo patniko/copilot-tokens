@@ -187,8 +187,10 @@ function buildNativeTools(): ToolDef[] {
 /** Resolve the path to the Copilot CLI.
  *  Prefers the system-installed CLI (works reliably in packaged builds),
  *  then falls back to bundled node_modules paths for dev mode. */
-function resolveCopilotCliPath(): string {
-  // 1. System-installed CLI (e.g., via npm -g or homebrew)
+const platformPkg = `copilot-${process.platform}-${process.arch}`;
+
+/** Resolve the system-installed CLI binary (global npm, homebrew, etc.) */
+function resolveSystemCli(): string {
   const systemPaths = [
     '/opt/homebrew/bin/copilot',
     '/usr/local/bin/copilot',
@@ -197,26 +199,39 @@ function resolveCopilotCliPath(): string {
   for (const p of systemPaths) {
     if (existsSync(p)) return p;
   }
-  // Try `which copilot` as a catch-all
   try {
     const found = execSync('which copilot', { encoding: 'utf-8' }).trim();
     if (found && existsSync(found)) return found;
   } catch { /* not found */ }
+  return '';
+}
 
-  // 2. ASAR-unpacked path (packaged builds with bundled CLI)
+/** Resolve the bundled CLI shipped inside the app or in node_modules (dev). */
+function resolveBundledCliPath(): string {
+  const nativeBin = `@github/${platformPkg}/copilot${process.platform === 'win32' ? '.exe' : ''}`;
+  const jsFallback = join('@github', 'copilot', 'index.js');
+
+  // 1. ASAR-unpacked paths (packaged builds with bundled CLI)
   const appPath = app.getAppPath();
-  const unpackedPath = join(appPath + '.unpacked', 'node_modules', '@github', 'copilot', 'index.js');
-  if (existsSync(unpackedPath)) return unpackedPath;
+  const unpackedBase = appPath + '.unpacked';
+  const unpackedNative = join(unpackedBase, 'node_modules', nativeBin);
+  if (existsSync(unpackedNative)) return unpackedNative;
+  const unpackedJs = join(unpackedBase, 'node_modules', jsFallback);
+  if (existsSync(unpackedJs)) return unpackedJs;
 
-  // 3. Adjacent to app path (non-asar packaged builds)
-  const adjacentPath = join(appPath, 'node_modules', '@github', 'copilot', 'index.js');
-  if (existsSync(adjacentPath)) return adjacentPath;
+  // 2. Adjacent to app path (non-asar packaged builds)
+  const adjacentNative = join(appPath, 'node_modules', nativeBin);
+  if (existsSync(adjacentNative)) return adjacentNative;
+  const adjacentJs = join(appPath, 'node_modules', jsFallback);
+  if (existsSync(adjacentJs)) return adjacentJs;
 
-  // 4. Walk up from __dirname (dev mode)
+  // 3. Walk up from __dirname (dev mode)
   let dir = __dirname;
   for (let i = 0; i < 10; i++) {
-    const candidate = join(dir, 'node_modules', '@github', 'copilot', 'index.js');
-    if (existsSync(candidate)) return candidate;
+    const candidateNative = join(dir, 'node_modules', nativeBin);
+    if (existsSync(candidateNative)) return candidateNative;
+    const candidateJs = join(dir, 'node_modules', jsFallback);
+    if (existsSync(candidateJs)) return candidateJs;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -266,11 +281,17 @@ export interface SystemPromptConfig {
   content: string;
 }
 
+export type CliMode =
+  | { type: 'bundled' }
+  | { type: 'installed' }
+  | { type: 'remote'; url: string };
+
 interface SettingsStoreSchema {
   systemPrompt: SystemPromptConfig;
   features: FeatureFlags;
   reasoningEffort: ReasoningEffort | null;
   customAgents: CustomAgentConfig[];
+  cliMode: CliMode;
 }
 
 export interface FeatureFlags {
@@ -300,6 +321,7 @@ const settingsStore = new Store<SettingsStoreSchema>({
     features: defaultFeatures,
     reasoningEffort: 'medium',
     customAgents: [],
+    cliMode: { type: 'bundled' },
   },
 });
 
@@ -398,6 +420,16 @@ export class CopilotService {
     }
   }
 
+  getCliMode(): CliMode {
+    return settingsStore.get('cliMode');
+  }
+
+  setCliMode(mode: CliMode): void {
+    settingsStore.set('cliMode', mode);
+    // Tear down client so ensureStarted re-creates it with new mode
+    this.stop();
+  }
+
   async listSessions(): Promise<{ sessionId: string; startTime: string; modifiedTime: string; summary?: string }[]> {
     await this.ensureStarted();
     const sessions = await this.client!.listSessions();
@@ -459,16 +491,40 @@ export class CopilotService {
   async ensureStarted(): Promise<void> {
     if (!this.started) {
       const { CopilotClient } = await loadSDK();
-      const cliPath = resolveCopilotCliPath();
-      console.log('[CopilotService] Resolved CLI path:', cliPath || '(SDK default)');
+      const cliMode = this.getCliMode();
       const opts: Record<string, unknown> = { autoStart: false };
-      if (cliPath) opts.cliPath = cliPath;
+
+      if (cliMode.type === 'remote') {
+        // Connect to an existing CLI server — don't spawn a process
+        opts.cliUrl = cliMode.url;
+        console.log('[CopilotService] Using remote CLI at', cliMode.url);
+      } else if (cliMode.type === 'installed') {
+        // Use the system-installed CLI binary
+        const systemPath = resolveSystemCli();
+        if (systemPath) {
+          opts.cliPath = systemPath;
+          console.log('[CopilotService] Using installed CLI at', systemPath);
+        } else {
+          console.warn('[CopilotService] No system CLI found, falling back to bundled');
+          const cliPath = resolveBundledCliPath();
+          if (cliPath) opts.cliPath = cliPath;
+          console.log('[CopilotService] Resolved bundled CLI path:', cliPath || '(SDK default)');
+        }
+      } else {
+        // 'bundled' — prefer the native binary shipped inside the app
+        const cliPath = resolveBundledCliPath();
+        if (cliPath) opts.cliPath = cliPath;
+        console.log('[CopilotService] Resolved bundled CLI path:', cliPath || '(SDK default)');
+      }
+
       // When using a bundled .js CLI in packaged Electron, process.execPath is
       // the Electron binary. ELECTRON_RUN_AS_NODE makes it behave as plain Node.
-      // Not needed for system-installed CLI (no .js extension → uses shebang).
-      if (app.isPackaged && cliPath.endsWith('.js')) {
+      // Not needed for the native platform binary (no .js extension).
+      const resolvedPath = opts.cliPath as string | undefined;
+      if (app.isPackaged && resolvedPath?.endsWith('.js')) {
         opts.env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
       }
+
       this.client = new CopilotClient(opts as ConstructorParameters<typeof CopilotClient>[0]);
       await this.client.start();
       this.started = true;

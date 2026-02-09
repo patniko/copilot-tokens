@@ -206,6 +206,12 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   setSystemPrompt(config: { mode: 'append' | 'replace'; content: string }): Promise<void> {
     return ipcRenderer.invoke('settings:setSystemPrompt', config);
   },
+  getCliMode(): Promise<{ type: 'bundled' } | { type: 'installed' } | { type: 'remote'; url: string }> {
+    return ipcRenderer.invoke('settings:getCliMode');
+  },
+  setCliMode(mode: { type: 'bundled' } | { type: 'installed' } | { type: 'remote'; url: string }): Promise<void> {
+    return ipcRenderer.invoke('settings:setCliMode', mode);
+  },
 });
 
 contextBridge.exposeInMainWorld('authAPI', {

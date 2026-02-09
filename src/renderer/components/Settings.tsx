@@ -6,6 +6,11 @@ import type { Theme } from '../lib/themes';
 
 type SettingsTab = 'general' | 'prompt' | 'features';
 
+type CliMode =
+  | { type: 'bundled' }
+  | { type: 'installed' }
+  | { type: 'remote'; url: string };
+
 interface FeatureFlags {
   customTools: boolean;
   askUser: boolean;
@@ -42,6 +47,11 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
   const [promptSaved, setPromptSaved] = useState(false);
   const [promptDirty, setPromptDirty] = useState(false);
 
+  // CLI mode state
+  const [cliMode, setCliMode] = useState<CliMode>({ type: 'bundled' });
+  const [remoteUrl, setRemoteUrl] = useState('');
+  const [cliModeSaved, setCliModeSaved] = useState(false);
+
   // Feature flags state
   const [features, setFeatures] = useState<FeatureFlags>({
     customTools: true,
@@ -76,6 +86,10 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
         setPromptDirty(false);
         setPromptSaved(false);
       });
+      window.settingsAPI.getCliMode().then((mode) => {
+        setCliMode(mode);
+        if (mode.type === 'remote') setRemoteUrl(mode.url);
+      });
     }
     if (window.featuresAPI) {
       window.featuresAPI.get().then(setFeatures);
@@ -105,6 +119,23 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
     setReasoningEffort(effort);
     if (window.featuresAPI) {
       await window.featuresAPI.setReasoningEffort(effort);
+    }
+  };
+
+  const handleCliModeChange = async (mode: CliMode) => {
+    setCliMode(mode);
+    if (window.settingsAPI) {
+      await window.settingsAPI.setCliMode(mode);
+      // Refresh model list from the new CLI backend
+      if (window.modelAPI) {
+        setModelsLoading(true);
+        window.modelAPI.refresh().then((models) => {
+          setAvailableModels(models);
+          setModelsLoading(false);
+        }).catch(() => setModelsLoading(false));
+      }
+      setCliModeSaved(true);
+      setTimeout(() => setCliModeSaved(false), 2000);
     }
   };
 
@@ -290,6 +321,77 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
                       )}
                       <p className="mt-1.5 text-[10px] text-[var(--text-secondary)]">
                         Changes take effect on next message
+                      </p>
+                    </section>
+
+                    {/* CLI Connection Mode */}
+                    <section>
+                      <label className="block text-sm uppercase tracking-wider text-[var(--text-secondary)] mb-3">
+                        Copilot CLI
+                      </label>
+                      <div className="flex flex-col gap-2">
+                        {([
+                          { type: 'bundled' as const, label: 'Bundled', icon: '📦', desc: 'Use the CLI shipped with this app' },
+                          { type: 'installed' as const, label: 'System Installed', icon: '💻', desc: 'Use globally installed copilot CLI' },
+                          { type: 'remote' as const, label: 'Remote Server', icon: '🌐', desc: 'Connect to a running CLI server' },
+                        ] as const).map(({ type, label, icon, desc }) => {
+                          const active = cliMode.type === type;
+                          return (
+                            <motion.button
+                              key={type}
+                              onClick={() => {
+                                if (type === 'remote') {
+                                  const url = remoteUrl || 'localhost:3333';
+                                  setRemoteUrl(url);
+                                  handleCliModeChange({ type: 'remote', url });
+                                } else {
+                                  handleCliModeChange({ type });
+                                }
+                              }}
+                              whileHover={{ scale: 1.02 }}
+                              className={`flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
+                                active
+                                  ? 'border-[var(--accent-gold)] bg-[var(--accent-gold)]/10'
+                                  : 'border-[var(--border-color)] bg-[var(--bg-primary)] hover:border-[var(--text-secondary)]'
+                              }`}
+                            >
+                              <span className="text-lg shrink-0">{icon}</span>
+                              <div className="text-left min-w-0">
+                                <div className="text-sm font-medium text-[var(--text-primary)]">{label}</div>
+                                <div className="text-[11px] text-[var(--text-secondary)]">{desc}</div>
+                              </div>
+                              {active && (
+                                <span className="ml-auto text-[var(--accent-gold)]">✓</span>
+                              )}
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+
+                      {cliMode.type === 'remote' && (
+                        <div className="mt-3 flex gap-2">
+                          <input
+                            type="text"
+                            value={remoteUrl}
+                            onChange={(e) => setRemoteUrl(e.target.value)}
+                            placeholder="localhost:3333"
+                            className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm font-mono placeholder:text-[var(--text-secondary)]/50"
+                          />
+                          <button
+                            onClick={() => handleCliModeChange({ type: 'remote', url: remoteUrl })}
+                            className="px-3 py-2 rounded-lg text-sm font-medium bg-[var(--accent-gold)] text-black hover:bg-[var(--accent-gold)]/90 transition-colors cursor-pointer"
+                          >
+                            Connect
+                          </button>
+                        </div>
+                      )}
+
+                      {cliModeSaved && (
+                        <span className="mt-2 block text-xs text-[var(--accent-green)]">✓ CLI mode updated — sessions restarted</span>
+                      )}
+
+                      <p className="mt-1.5 text-[10px] text-[var(--text-secondary)]">
+                        Changing CLI mode restarts all active sessions
                       </p>
                     </section>
                   </div>

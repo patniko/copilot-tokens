@@ -441,6 +441,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     copilot.setSystemPrompt(config);
   });
 
+  ipcMain.handle('settings:getCliMode', () => {
+    return copilot.getCliMode();
+  });
+
+  ipcMain.handle('settings:setCliMode', (_event, mode: import('./copilot-service').CliMode) => {
+    copilot.setCliMode(mode);
+  });
+
   // ── Auth ──
 
   ipcMain.handle('auth:getCliUser', async () => {
