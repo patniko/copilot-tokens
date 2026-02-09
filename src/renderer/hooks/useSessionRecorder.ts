@@ -8,7 +8,7 @@ import type { SessionEvent } from '../../main/stats-service';
  */
 export function useSessionRecorder() {
   const eventsRef = useRef<SessionEvent[]>([]);
-  const startRef = useRef(Date.now());
+  const startRef = useRef(0);
 
   useEffect(() => {
     eventsRef.current = [];

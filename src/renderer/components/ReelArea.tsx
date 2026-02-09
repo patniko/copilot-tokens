@@ -164,6 +164,7 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
       }
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMessages(restored);
   }, []); // Only on mount
 
@@ -177,6 +178,7 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
         content: userPrompt,
         timestamp: Date.now(),
       };
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessages((prev) => [...prev, msg]);
       setIsWaiting(true);
       setIsGenerating(true);

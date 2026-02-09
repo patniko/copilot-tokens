@@ -72,6 +72,8 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
   const [diffContent, setDiffContent] = useState('');
   const [diffLoading, setDiffLoading] = useState(false);
   const closingRef = useRef(false);
+  const reelTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const autoCloseTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Reel animation: lock files one by one
   useEffect(() => {
@@ -89,11 +91,19 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
       setLockedCount(i);
       if (i >= changedFiles.length) {
         clearInterval(interval);
-        setTimeout(() => setStep('editor'), 300);
+        reelTimeoutRef.current = setTimeout(() => setStep('editor'), 300);
       }
     }, perFile);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(reelTimeoutRef.current);
+    };
   }, [step, changedFiles.length]);
+
+  // Clean up auto-close timeout on unmount
+  useEffect(() => {
+    return () => clearTimeout(autoCloseTimeoutRef.current);
+  }, []);
 
   const handleConfirm = useCallback(async () => {
     const msg = message.trim() || 'feat: session changes';
@@ -107,7 +117,7 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
         onCommitSuccess?.();
         confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
         // Auto-close after 2s
-        setTimeout(() => {
+        autoCloseTimeoutRef.current = setTimeout(() => {
           if (!closingRef.current) {
             closingRef.current = true;
             onClose();

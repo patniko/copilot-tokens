@@ -1,0 +1,53 @@
+# Release pipeline — builds Electron app for macOS, Windows, and Linux.
+# Triggered by version tags (v*) or manually via workflow_dispatch.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── macOS (universal: x64 + arm64) ──────────────────────────
+          - os: macos-latest
+            make-args: --arch x64,arm64
+            artifact-name: release-macos
+
+          # ── Windows ─────────────────────────────────────────────────
+          - os: windows-latest
+            make-args: ""
+            artifact-name: release-windows
+
+          # ── Linux ───────────────────────────────────────────────────
+          - os: ubuntu-latest
+            make-args: ""
+            artifact-name: release-linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Build distributable artifacts with electron-forge
+      - name: Make (electron-forge)
+        run: npm run make -- ${{ matrix.make-args }}
+
+      # Upload the output directory so artifacts are available for download
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: out/make/**/*
+          if-no-files-found: error

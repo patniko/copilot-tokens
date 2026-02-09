@@ -87,6 +87,7 @@ export default function SplitLayout({
 
   // Keep sizes in sync with panel count — equal distribution on add/remove
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSizes(panels.map(() => 1 / panels.length));
   }, [panels.length]);
 

@@ -57,6 +57,7 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
 
   useEffect(() => {
     if (!isOpen) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTab('general');
     if (window.modelAPI) {
       window.modelAPI.get().then(setModel);
