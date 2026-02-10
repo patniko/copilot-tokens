@@ -566,10 +566,18 @@ export class CopilotService {
       if (features.askUser && this.userInputCallback) {
         opts.onUserInputRequest = this.userInputCallback;
       }
-      // Reasoning effort
+      // Reasoning effort — only if the selected model supports it
       const effort = this.getReasoningEffort();
       if (features.reasoning && effort) {
-        opts.reasoningEffort = effort;
+        try {
+          const models = await this.client!.listModels();
+          const info = models.find(m => m.id === this.model);
+          if (info?.capabilities?.supports?.reasoningEffort) {
+            opts.reasoningEffort = effort;
+          }
+        } catch {
+          // If we can't verify, skip reasoning effort to avoid session.create failure
+        }
       }
       // Infinite sessions
       if (features.infiniteSessions) {
@@ -625,6 +633,39 @@ export class CopilotService {
     if (session) {
       await session.destroy().catch(() => {});
       this.sessions.delete(panelId);
+    }
+  }
+
+  /** Destroy all sessions and resume them so new session-level options take effect. */
+  async recycleAllSessions(): Promise<void> {
+    if (!this.started || this.sessions.size === 0) return;
+    const entries = [...this.sessions.entries()];
+    for (const [panelId, session] of entries) {
+      const sid = session.sessionId;
+      await session.destroy().catch(() => {});
+      this.sessions.delete(panelId);
+      try {
+        const opts: Record<string, unknown> = {
+          model: this.model,
+          streaming: true,
+          disableResume: true,
+        };
+        if (this.workingDirectory) opts.workingDirectory = this.workingDirectory;
+        if (this.permissionCallback) {
+          const cb = this.permissionCallback;
+          opts.onPermissionRequest = async (request: Record<string, unknown>) => {
+            const decision = await cb(request);
+            return { kind: decision === 'deny' ? 'denied-interactively-by-user' : 'approved' };
+          };
+        }
+        if (this.userInputCallback) {
+          opts.onUserInputRequest = this.userInputCallback;
+        }
+        const resumed = await this.client!.resumeSession(sid, opts as Parameters<CopilotClientType['resumeSession']>[1]);
+        this.sessions.set(panelId, resumed);
+      } catch {
+        // Session couldn't be resumed; ensureSession will create a fresh one on next message
+      }
     }
   }
 
