@@ -35,6 +35,9 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [sendMenuOpen, setSendMenuOpen] = useState(false);
   const [queue, setQueue] = useState<{ prompt: string; attachments?: { path: string }[] }[]>([]);
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef(-1);
+  const draftRef = useRef('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { play } = useSound();
@@ -129,6 +132,9 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
     }
     if (atts) onBadge?.('badge-first-image');
     onSend?.(message, atts);
+    historyRef.current.unshift(message);
+    historyIndexRef.current = -1;
+    draftRef.current = '';
     setPrompt('');
     setAttachments([]);
   }, [cwd, onBrowseCwd, prompt, attachments, isGenerating, play, setGenerating, onSend, panelId, onBadge]);
@@ -142,6 +148,39 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+    if (e.key === 'ArrowUp' && historyRef.current.length > 0) {
+      const ta = textareaRef.current;
+      // Only navigate history when cursor is on the first line
+      if (ta && ta.selectionStart !== undefined) {
+        const textBefore = ta.value.slice(0, ta.selectionStart);
+        if (textBefore.includes('\n')) return;
+      }
+      if (historyIndexRef.current === -1) {
+        draftRef.current = prompt;
+      }
+      const nextIndex = Math.min(historyIndexRef.current + 1, historyRef.current.length - 1);
+      if (nextIndex !== historyIndexRef.current) {
+        historyIndexRef.current = nextIndex;
+        e.preventDefault();
+        setPrompt(historyRef.current[nextIndex]);
+      }
+    }
+    if (e.key === 'ArrowDown' && historyIndexRef.current >= 0) {
+      const ta = textareaRef.current;
+      // Only navigate history when cursor is on the last line
+      if (ta && ta.selectionStart !== undefined) {
+        const textAfter = ta.value.slice(ta.selectionStart);
+        if (textAfter.includes('\n')) return;
+      }
+      const nextIndex = historyIndexRef.current - 1;
+      historyIndexRef.current = nextIndex;
+      e.preventDefault();
+      if (nextIndex < 0) {
+        setPrompt(draftRef.current);
+      } else {
+        setPrompt(historyRef.current[nextIndex]);
+      }
     }
   };
 

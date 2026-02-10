@@ -636,6 +636,26 @@ export class CopilotService {
     }
   }
 
+  /** Build the common options used when resuming a session. */
+  private buildResumeOpts(): Record<string, unknown> {
+    const opts: Record<string, unknown> = {
+      model: this.model,
+      streaming: true,
+    };
+    if (this.workingDirectory) opts.workingDirectory = this.workingDirectory;
+    if (this.permissionCallback) {
+      const cb = this.permissionCallback;
+      opts.onPermissionRequest = async (request: Record<string, unknown>) => {
+        const decision = await cb(request);
+        return { kind: decision === 'deny' ? 'denied-interactively-by-user' : 'approved' };
+      };
+    }
+    if (this.userInputCallback) {
+      opts.onUserInputRequest = this.userInputCallback;
+    }
+    return opts;
+  }
+
   /** Destroy all sessions and resume them so new session-level options take effect. */
   async recycleAllSessions(): Promise<void> {
     if (!this.started || this.sessions.size === 0) return;
@@ -645,22 +665,8 @@ export class CopilotService {
       await session.destroy().catch(() => {});
       this.sessions.delete(panelId);
       try {
-        const opts: Record<string, unknown> = {
-          model: this.model,
-          streaming: true,
-          disableResume: true,
-        };
-        if (this.workingDirectory) opts.workingDirectory = this.workingDirectory;
-        if (this.permissionCallback) {
-          const cb = this.permissionCallback;
-          opts.onPermissionRequest = async (request: Record<string, unknown>) => {
-            const decision = await cb(request);
-            return { kind: decision === 'deny' ? 'denied-interactively-by-user' : 'approved' };
-          };
-        }
-        if (this.userInputCallback) {
-          opts.onUserInputRequest = this.userInputCallback;
-        }
+        const opts = this.buildResumeOpts();
+        opts.disableResume = true;
         const resumed = await this.client!.resumeSession(sid, opts as Parameters<CopilotClientType['resumeSession']>[1]);
         this.sessions.set(panelId, resumed);
       } catch {
@@ -671,7 +677,7 @@ export class CopilotService {
 
   private abortResolves = new Map<string, () => void>();
 
-  async sendMessage(prompt: string, onEvent: EventCallback, attachments?: { path: string }[], panelId = 'main'): Promise<void> {
+  async sendMessage(prompt: string, onEvent: EventCallback, attachments?: { path: string }[], panelId = 'main', _retry = false): Promise<void> {
     const session = await this.ensureSession(panelId);
     const features = this.getFeatures();
 
@@ -925,7 +931,28 @@ export class CopilotService {
     if (attachments?.length) {
       sendOpts.attachments = attachments.map(a => ({ type: 'file' as const, path: a.path }));
     }
-    await session.send(sendOpts);
+    try {
+      await session.send(sendOpts);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!_retry && (msg.includes('Session not found') || msg.includes('connection is closed') || msg.includes('Client not connected'))) {
+        const staleId = session.sessionId;
+        this.sessions.delete(panelId);
+        this.abortResolves.delete(panelId);
+        // Try to resume the old session (preserves chat history)
+        try {
+          console.log('[CopilotService] Stale session detected, attempting resume:', staleId);
+          const opts = this.buildResumeOpts();
+          const resumed = await this.client!.resumeSession(staleId, opts as Parameters<CopilotClientType['resumeSession']>[1]);
+          this.sessions.set(panelId, resumed);
+        } catch {
+          // Resume failed — ensureSession will create a fresh one
+          console.warn('[CopilotService] Resume failed, will create fresh session');
+        }
+        return this.sendMessage(prompt, onEvent, attachments, panelId, true);
+      }
+      throw err;
+    }
     await done;
   }
 
