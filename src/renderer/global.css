@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* Theme custom properties — defaults match neon-arcade; overridden at runtime by ThemeProvider */
 :root {
   --bg-primary: #0d1117;

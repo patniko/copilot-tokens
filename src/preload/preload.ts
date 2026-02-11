@@ -134,6 +134,30 @@ contextBridge.exposeInMainWorld('gitAPI', {
   checkoutAll(): Promise<{ success: boolean }> {
     return ipcRenderer.invoke('git:checkoutAll');
   },
+  listBranches(): Promise<string[]> {
+    return ipcRenderer.invoke('git:listBranches');
+  },
+  defaultBranch(): Promise<string> {
+    return ipcRenderer.invoke('git:defaultBranch');
+  },
+  hasChanges(): Promise<boolean> {
+    return ipcRenderer.invoke('git:hasChanges');
+  },
+  switchBranch(branch: string): Promise<{ success: boolean; error?: string }> {
+    return ipcRenderer.invoke('git:switchBranch', branch);
+  },
+  createBranch(name: string, base?: string): Promise<{ success: boolean; error?: string }> {
+    return ipcRenderer.invoke('git:createBranch', name, base);
+  },
+  stash(message?: string): Promise<{ success: boolean; error?: string }> {
+    return ipcRenderer.invoke('git:stash', message);
+  },
+  stashList(): Promise<{ index: number; message: string; branch: string }[]> {
+    return ipcRenderer.invoke('git:stashList');
+  },
+  stashPop(index: number): Promise<{ success: boolean; error?: string }> {
+    return ipcRenderer.invoke('git:stashPop', index);
+  },
 });
 
 contextBridge.exposeInMainWorld('utilAPI', {
@@ -248,14 +272,14 @@ contextBridge.exposeInMainWorld('cwdAPI', {
   get(): Promise<string> {
     return ipcRenderer.invoke('cwd:get');
   },
-  set(dir: string): Promise<void> {
-    return ipcRenderer.invoke('cwd:set', dir);
+  set(dir: string, panelIds?: string[]): Promise<void> {
+    return ipcRenderer.invoke('cwd:set', dir, panelIds);
   },
   getRecent(): Promise<string[]> {
     return ipcRenderer.invoke('cwd:getRecent');
   },
-  browse(): Promise<string | null> {
-    return ipcRenderer.invoke('cwd:browse');
+  browse(panelIds?: string[]): Promise<string | null> {
+    return ipcRenderer.invoke('cwd:browse', panelIds);
   },
   gitInfo(dir: string): Promise<{ isRepo: boolean; branch?: string }> {
     return ipcRenderer.invoke('cwd:gitInfo', dir);

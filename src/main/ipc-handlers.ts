@@ -273,20 +273,145 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     });
   });
 
+  // --- Branch & stash operations ---
+
+  ipcMain.handle('git:listBranches', async () => {
+    const cwd = stats.getCwd();
+    if (!cwd) return [];
+    return new Promise<string[]>((resolve) => {
+      execFile('git', ['-C', cwd, 'branch', '--list', '--sort=-committerdate', '--format=%(refname:short)'], (err, stdout) => {
+        if (err) { resolve([]); return; }
+        resolve(stdout.trim().split('\n').filter(Boolean));
+      });
+    });
+  });
+
+  ipcMain.handle('git:defaultBranch', async () => {
+    const cwd = stats.getCwd();
+    if (!cwd) return 'main';
+    return new Promise<string>((resolve) => {
+      execFile('git', ['-C', cwd, 'symbolic-ref', 'refs/remotes/origin/HEAD', '--short'], (err, stdout) => {
+        if (!err && stdout.trim()) {
+          // Returns "origin/main" → extract "main"
+          resolve(stdout.trim().replace(/^origin\//, ''));
+          return;
+        }
+        // Fallback: check if main or master exists
+        execFile('git', ['-C', cwd, 'rev-parse', '--verify', '--quiet', 'main'], (err2) => {
+          resolve(err2 ? 'master' : 'main');
+        });
+      });
+    });
+  });
+
+  ipcMain.handle('git:hasChanges', async () => {
+    const cwd = stats.getCwd();
+    if (!cwd) return false;
+    return new Promise<boolean>((resolve) => {
+      execFile('git', ['-C', cwd, 'status', '--porcelain'], (err, stdout) => {
+        resolve(!err && stdout.trim().length > 0);
+      });
+    });
+  });
+
+  ipcMain.handle('git:switchBranch', async (_event, branch: string) => {
+    const cwd = stats.getCwd();
+    if (!cwd) return { success: false, error: 'No working directory' };
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      execFile('git', ['-C', cwd, 'checkout', branch], (err, _stdout, stderr) => {
+        if (err) {
+          resolve({ success: false, error: stderr.trim() || err.message });
+        } else {
+          resolve({ success: true });
+        }
+      });
+    });
+  });
+
+  ipcMain.handle('git:createBranch', async (_event, name: string, base?: string) => {
+    const cwd = stats.getCwd();
+    if (!cwd) return { success: false, error: 'No working directory' };
+    const args = ['-C', cwd, 'checkout', '-b', name];
+    if (base) args.push(base);
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      execFile('git', args, (err, _stdout, stderr) => {
+        if (err) {
+          resolve({ success: false, error: stderr.trim() || err.message });
+        } else {
+          resolve({ success: true });
+        }
+      });
+    });
+  });
+
+  ipcMain.handle('git:stash', async (_event, message?: string) => {
+    const cwd = stats.getCwd();
+    if (!cwd) return { success: false, error: 'No working directory' };
+    const args = ['-C', cwd, 'stash', 'push'];
+    if (message) args.push('-m', message);
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      execFile('git', args, (err, _stdout, stderr) => {
+        if (err) {
+          resolve({ success: false, error: stderr.trim() || err.message });
+        } else {
+          resolve({ success: true });
+        }
+      });
+    });
+  });
+
+  ipcMain.handle('git:stashList', async () => {
+    const cwd = stats.getCwd();
+    if (!cwd) return [];
+    return new Promise<{ index: number; message: string; branch: string }[]>((resolve) => {
+      execFile('git', ['-C', cwd, 'stash', 'list', '--format=%gd||%gs||%s'], (err, stdout) => {
+        if (err || !stdout.trim()) { resolve([]); return; }
+        const stashes = stdout.trim().split('\n').filter(Boolean).map((line) => {
+          const parts = line.split('||');
+          const indexMatch = parts[0]?.match(/\{(\d+)\}/);
+          return {
+            index: indexMatch ? parseInt(indexMatch[1], 10) : 0,
+            message: parts[2] || parts[1] || parts[0],
+            branch: (parts[1] || '').replace(/^On /, '').replace(/:.*/, ''),
+          };
+        });
+        resolve(stashes.slice(0, 10));
+      });
+    });
+  });
+
+  ipcMain.handle('git:stashPop', async (_event, index: number) => {
+    const cwd = stats.getCwd();
+    if (!cwd) return { success: false, error: 'No working directory' };
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      execFile('git', ['-C', cwd, 'stash', 'pop', `stash@{${index}}`], (err, _stdout, stderr) => {
+        if (err) {
+          resolve({ success: false, error: stderr.trim() || err.message });
+        } else {
+          resolve({ success: true });
+        }
+      });
+    });
+  });
+
   ipcMain.handle('cwd:get', () => {
     return stats.getCwd();
   });
 
-  ipcMain.handle('cwd:set', (_event, dir: string) => {
+  ipcMain.handle('cwd:set', (_event, dir: string, panelIds?: string[]) => {
     stats.setCwd(dir);
-    copilot.setWorkingDirectory(dir);
+    if (panelIds && panelIds.length > 0) {
+      copilot.setWorkingDirectoryForPanels(panelIds, dir);
+    } else {
+      copilot.setWorkingDirectory(dir);
+    }
   });
 
   ipcMain.handle('cwd:getRecent', () => {
     return stats.getRecentCwds();
   });
 
-  ipcMain.handle('cwd:browse', async () => {
+  ipcMain.handle('cwd:browse', async (_event, panelIds?: string[]) => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
       title: 'Select Working Directory',
@@ -294,7 +419,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (!result.canceled && result.filePaths.length > 0) {
       const dir = result.filePaths[0];
       stats.setCwd(dir);
-      copilot.setWorkingDirectory(dir);
+      if (panelIds && panelIds.length > 0) {
+        copilot.setWorkingDirectoryForPanels(panelIds, dir);
+      } else {
+        copilot.setWorkingDirectory(dir);
+      }
       return dir;
     }
     return null;

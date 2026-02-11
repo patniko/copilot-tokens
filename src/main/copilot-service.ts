@@ -332,6 +332,8 @@ export class CopilotService {
   private started = false;
 
   private workingDirectory: string | undefined;
+  // Per-panel CWD overrides (for multi-tab support)
+  private panelCwds = new Map<string, string>();
   private model: string = 'claude-sonnet-4';
 
   // Permission handler set by the IPC layer
@@ -357,6 +359,18 @@ export class CopilotService {
       for (const [id, session] of this.sessions) {
         session.destroy().catch(() => {});
         this.sessions.delete(id);
+      }
+    }
+  }
+
+  /** Set CWD for specific panels (tab-scoped) without affecting other tabs' sessions. */
+  setWorkingDirectoryForPanels(panelIds: string[], dir: string): void {
+    for (const pid of panelIds) {
+      this.panelCwds.set(pid, dir);
+      const session = this.sessions.get(pid);
+      if (session) {
+        session.destroy().catch(() => {});
+        this.sessions.delete(pid);
       }
     }
   }
@@ -542,8 +556,8 @@ export class CopilotService {
         excludedTools: [],
         mcpServers: loadMCPServers(),
       };
-      if (this.workingDirectory) {
-        opts.workingDirectory = this.workingDirectory;
+      if (this.panelCwds.get(panelId) || this.workingDirectory) {
+        opts.workingDirectory = this.panelCwds.get(panelId) || this.workingDirectory;
       }
       // Apply custom system prompt if configured
       const promptConfig = this.getSystemPrompt();
@@ -634,6 +648,7 @@ export class CopilotService {
       await session.destroy().catch(() => {});
       this.sessions.delete(panelId);
     }
+    this.panelCwds.delete(panelId);
   }
 
   /** Build the common options used when resuming a session. */

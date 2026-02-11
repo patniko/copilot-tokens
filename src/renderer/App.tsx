@@ -15,6 +15,8 @@ import SessionBrowser from './components/SessionBrowser';
 import LevelBadge from './components/LevelBadge';
 import CwdDropdown from './components/CwdDropdown';
 import LevelUpOverlay from './components/LevelUpOverlay';
+import TabBar from './components/TabBar';
+import type { ProjectTab, TabActivity } from './components/TabBar';
 import { useSessionRecorder } from './hooks/useSessionRecorder';
 import { useBadges } from './hooks/useBadges';
 import { addSessionToProgress, type LevelProgress } from './lib/level-system';
@@ -31,10 +33,7 @@ export default function App() {
   const [replaySessionTimestamp, setReplaySessionTimestamp] = useState<number | null>(null);
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState<number | null>(null);
-  const [changedFiles, setChangedFiles] = useState<string[]>([]);
   const [inputTokens, setInputTokens] = useState(0);
-  const [cwd, setCwd] = useState('');
-  const [gitBranch, setGitBranch] = useState<string | null>(null);
   const [currentModel, setCurrentModel] = useState('');
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string; contextWindow: number }[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
@@ -44,8 +43,7 @@ export default function App() {
   const sessionRecorder = useSessionRecorder();
   const { trigger: triggerBadge } = useBadges();
 
-  // YOLO mode state
-  const [yoloMode, setYoloMode] = useState(false);
+  // YOLO visual effects (global)
   const [yoloFlash, setYoloFlash] = useState(false);
   const [yoloCool, setYoloCool] = useState(false);
 
@@ -57,26 +55,49 @@ export default function App() {
   const sessionStartRef = useRef<number | null>(null);
   const conversationEventsRef = useRef<Record<string, unknown>[]>([]);
 
-  // Reset key — incrementing remounts ReelArea + TokenDashboard
+  // Reset key — incrementing remounts TokenDashboard
   const [resetKey, setResetKey] = useState(0);
 
-  // Dynamic panels state: each panel has its own id, prompt, and resetKey
-  const [panels, setPanels] = useState<{ id: string; userPrompt: string | null; resetKey: number; initialEvents?: Record<string, unknown>[] }[]>([
-    { id: 'main', userPrompt: null, resetKey: 0 },
+  // --- Tab state ---
+  const tabCounter = useRef(0);
+  const initialTabId = `tab-${tabCounter.current}`;
+  const [tabs, setTabs] = useState<ProjectTab[]>([
+    { id: initialTabId, cwd: '', gitBranch: null, changedFiles: [], panels: [{ id: `${initialTabId}:main`, userPrompt: null, resetKey: 0 }], panelCounter: 0, yoloMode: false },
   ]);
-  const panelCounter = useRef(0);
+  const [activeTabId, setActiveTabId] = useState(initialTabId);
+  const [tabActivity, setTabActivity] = useState<Record<string, TabActivity>>({});
+
+  // Derived active tab helpers
+  const activeTab = tabs.find(t => t.id === activeTabId) ?? tabs[0];
+  const cwd = activeTab.cwd;
+  const gitBranch = activeTab.gitBranch;
+  const changedFiles = activeTab.changedFiles;
+  const panels = activeTab.panels;
+  const yoloMode = activeTab.yoloMode;
+
+  // Update a specific tab's state
+  const updateTab = useCallback((tabId: string, updater: (tab: ProjectTab) => ProjectTab) => {
+    setTabs(prev => prev.map(t => t.id === tabId ? updater(t) : t));
+  }, []);
+
+  // All panel IDs across all tabs (for global event listeners)
+  const allPanelIds = tabs.flatMap(t => t.panels.map(p => p.id));
 
   const handleReset = useCallback(() => {
     setInputTokens(0);
-    setChangedFiles([]);
     latestStatsRef.current = null;
     sessionStartRef.current = null;
     conversationEventsRef.current = [];
     sessionRecorder.reset();
     setResetKey((k) => k + 1);
-    // Reset all panels to just the main one
-    setPanels([{ id: 'main', userPrompt: null, resetKey: Date.now() }]);
-  }, [sessionRecorder]);
+    // Reset active tab's panels to just its main panel
+    updateTab(activeTabId, (tab) => ({
+      ...tab,
+      changedFiles: [],
+      panels: [{ id: `${tab.id}:main`, userPrompt: null, resetKey: Date.now() }],
+      panelCounter: 0,
+    }));
+  }, [sessionRecorder, activeTabId, updateTab]);
 
   // Permission request state + reaction time tracking
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestData | null>(null);
@@ -122,16 +143,16 @@ export default function App() {
     if (window.cwdAPI) {
       window.cwdAPI.get().then((dir) => {
         if (dir) {
-          setCwd(dir);
+          updateTab(activeTabId, (tab) => ({ ...tab, cwd: dir }));
           window.cwdAPI.gitInfo(dir).then((info) => {
-            setGitBranch(info.isRepo ? (info.branch ?? null) : null);
+            updateTab(activeTabId, (tab) => ({ ...tab, gitBranch: info.isRepo ? (info.branch ?? null) : null }));
           });
           // Seed changed files from existing git diff
           window.cwdAPI.gitStats(dir).then((stats) => {
             if (stats.files.length > 0) {
-              setChangedFiles((prev) => {
-                const merged = new Set([...prev, ...stats.files]);
-                return [...merged];
+              updateTab(activeTabId, (tab) => {
+                const merged = new Set([...tab.changedFiles, ...stats.files]);
+                return { ...tab, changedFiles: [...merged] };
               });
             }
           });
@@ -162,27 +183,28 @@ export default function App() {
   }, []);
 
   const refreshGitInfo = useCallback((dir: string) => {
-    setCwd(dir);
+    updateTab(activeTabId, (tab) => ({ ...tab, cwd: dir }));
     if (window.cwdAPI) {
-      // Sync CWD to main process — this destroys all sessions so they
-      // pick up the new working directory on next message.
-      window.cwdAPI.set(dir);
+      // Sync CWD to main process — destroys sessions for this tab's panels
+      // so they pick up the new working directory on next message.
+      const panelIds = tabs.find(t => t.id === activeTabId)?.panels.map(p => p.id);
+      window.cwdAPI.set(dir, panelIds);
       window.cwdAPI.gitInfo(dir).then((info) => {
-        setGitBranch(info.isRepo ? (info.branch ?? null) : null);
+        updateTab(activeTabId, (tab) => ({ ...tab, gitBranch: info.isRepo ? (info.branch ?? null) : null }));
       });
       window.cwdAPI.gitStats(dir).then((stats) => {
-        setChangedFiles(stats.files);
+        updateTab(activeTabId, (tab) => ({ ...tab, changedFiles: stats.files }));
       });
     }
-  }, []);
+  }, [activeTabId, tabs, updateTab]);
 
   const refreshChangedFiles = useCallback(() => {
     if (window.cwdAPI && cwd) {
       window.cwdAPI.gitStats(cwd).then((stats) => {
-        setChangedFiles(stats.files);
+        updateTab(activeTabId, (tab) => ({ ...tab, changedFiles: stats.files }));
       });
     }
-  }, [cwd]);
+  }, [cwd, activeTabId, updateTab]);
 
   const handleModelSwitch = useCallback((modelId: string) => {
     setCurrentModel(modelId);
@@ -210,9 +232,10 @@ export default function App() {
 
   const handleBrowseCwd = useCallback(async () => {
     if (!window.cwdAPI) return;
-    const dir = await window.cwdAPI.browse();
+    const panelIds = tabs.find(t => t.id === activeTabId)?.panels.map(p => p.id);
+    const dir = await window.cwdAPI.browse(panelIds);
     if (dir) refreshGitInfo(dir);
-  }, [refreshGitInfo]);
+  }, [refreshGitInfo, activeTabId, tabs]);
 
   // Persistent "super" border when above 500K tokens
   const [superMode, setSuperMode] = useState(false);
@@ -231,7 +254,7 @@ export default function App() {
     setInputTokens((prev) => prev + input);
   }, []);
 
-  // Track changed files from copilot events (all panels)
+  // Track changed files from copilot events (all panels across all tabs)
   useEffect(() => {
     if (!window.copilotAPI?.onEvent) return;
     const handler = (event: unknown) => {
@@ -243,14 +266,25 @@ export default function App() {
         if (toolName === 'edit' || toolName === 'create' || toolName === 'write') {
           const filePath = String(args.path ?? args.file ?? '');
           if (filePath) {
-            setChangedFiles((prev) => (prev.includes(filePath) ? prev : [...prev, filePath]));
+            // Find which tab this panel belongs to, update its changedFiles
+            setTabs(prev => prev.map(tab => {
+              const panelIds = tab.panels.map(p => p.id);
+              // If this event came from one of this tab's panels, update it
+              // (we listen on all panels, but update the right tab)
+              return tab;
+            }));
+            // For simplicity, update active tab's changedFiles
+            updateTab(activeTabId, (tab) => ({
+              ...tab,
+              changedFiles: tab.changedFiles.includes(filePath) ? tab.changedFiles : [...tab.changedFiles, filePath],
+            }));
           }
         }
       }
     };
-    const unsubs = panels.map(p => window.copilotAPI.onEvent(handler, p.id));
+    const unsubs = allPanelIds.map(pid => window.copilotAPI.onEvent(handler, pid));
     return () => unsubs.forEach(u => u());
-  }, [panels.map(p => p.id).join(',')]);
+  }, [allPanelIds.join(','), activeTabId, updateTab]);
 
   // Capture raw copilot events for conversation persistence
   useEffect(() => {
@@ -261,9 +295,44 @@ export default function App() {
         conversationEventsRef.current.push(ev);
       }
     };
-    const unsubs = panels.map(p => window.copilotAPI.onEvent(handler, p.id));
+    const unsubs = allPanelIds.map(pid => window.copilotAPI.onEvent(handler, pid));
     return () => unsubs.forEach(u => u());
-  }, [panels.map(p => p.id).join(',')]);
+  }, [allPanelIds.join(',')]);
+
+  // Track per-tab agent activity from copilot events
+  useEffect(() => {
+    if (!window.copilotAPI?.onEvent) return;
+    const panelToTab = new Map<string, string>();
+    for (const tab of tabs) {
+      for (const panel of tab.panels) {
+        panelToTab.set(panel.id, tab.id);
+      }
+    }
+    const handlers = allPanelIds.map(pid => {
+      const handler = (event: unknown) => {
+        const ev = event as Record<string, unknown> | null;
+        if (!ev || typeof ev !== 'object') return;
+        const tabId = panelToTab.get(pid);
+        if (!tabId) return;
+        if (ev.type === 'assistant.turn_start') {
+          setTabActivity(prev => ({ ...prev, [tabId]: 'active' }));
+        } else if (ev.type === 'ask_user.request') {
+          setTabActivity(prev => ({ ...prev, [tabId]: 'waiting' }));
+        } else if (ev.type === 'session.idle') {
+          setTabActivity(prev => ({ ...prev, [tabId]: 'idle' }));
+        }
+      };
+      return window.copilotAPI.onEvent(handler, pid);
+    });
+    return () => handlers.forEach(u => u());
+  }, [allPanelIds.join(','), tabs]);
+
+  // Set tab to waiting when permission dialog is shown
+  useEffect(() => {
+    if (permissionRequest) {
+      setTabActivity(prev => ({ ...prev, [activeTabId]: 'waiting' }));
+    }
+  }, [permissionRequest, activeTabId]);
 
   const handlePanelSend = useCallback((panelId: string, prompt: string) => {
     if (!currentModel) {
@@ -280,38 +349,44 @@ export default function App() {
     // Dual agents badge: if already generating from another panel, two are running
     if (agentActive && panels.length > 1) triggerBadge('badge-dual-agents');
     setAgentActive(true);
-    setPanels(prev => prev.map(p =>
-      p.id === panelId ? { ...p, userPrompt: prompt } : p,
-    ));
+    updateTab(activeTabId, (tab) => ({
+      ...tab,
+      panels: tab.panels.map(p =>
+        p.id === panelId ? { ...p, userPrompt: prompt } : p,
+      ),
+    }));
     requestAnimationFrame(() => {
-      setPanels(prev => prev.map(p =>
-        p.id === panelId ? { ...p, userPrompt: null } : p,
-      ));
+      updateTab(activeTabId, (tab) => ({
+        ...tab,
+        panels: tab.panels.map(p =>
+          p.id === panelId ? { ...p, userPrompt: null } : p,
+        ),
+      }));
     });
-  }, [currentModel, modelsLoading, triggerBadge, agentActive, panels.length]);
+  }, [currentModel, modelsLoading, triggerBadge, agentActive, panels.length, activeTabId, updateTab]);
 
   const handleSend = useCallback((prompt: string) => {
-    handlePanelSend('main', prompt);
-  }, [handlePanelSend]);
+    handlePanelSend(`${activeTabId}:main`, prompt);
+  }, [handlePanelSend, activeTabId]);
 
   const handleAddPanel = useCallback(() => {
-    panelCounter.current += 1;
-    const newId = `split-${panelCounter.current}`;
-    setPanels(prev => {
-      const next = [...prev, { id: newId, userPrompt: null, resetKey: 0 }];
-      if (next.length === 2) triggerBadge('badge-first-split');
-      if (next.length >= 3) triggerBadge('badge-3-panels');
-      return next;
+    updateTab(activeTabId, (tab) => {
+      const next = tab.panelCounter + 1;
+      const newId = `${tab.id}:split-${next}`;
+      const newPanels = [...tab.panels, { id: newId, userPrompt: null, resetKey: 0 }];
+      if (newPanels.length === 2) triggerBadge('badge-first-split');
+      if (newPanels.length >= 3) triggerBadge('badge-3-panels');
+      return { ...tab, panels: newPanels, panelCounter: next };
     });
-  }, [triggerBadge]);
+  }, [triggerBadge, activeTabId, updateTab]);
 
   const handleClosePanel = useCallback((panelId: string) => {
-    setPanels(prev => {
-      if (prev.length <= 1) return prev;
-      return prev.filter(p => p.id !== panelId);
+    updateTab(activeTabId, (tab) => {
+      if (tab.panels.length <= 1) return tab;
+      return { ...tab, panels: tab.panels.filter(p => p.id !== panelId) };
     });
     window.copilotAPI?.destroySession(panelId);
-  }, []);
+  }, [activeTabId, updateTab]);
 
   // Record session to leaderboard when agent goes idle
   useEffect(() => {
@@ -369,29 +444,101 @@ export default function App() {
 
       // Refresh git changed files after agent finishes
       if (window.cwdAPI) {
-        window.cwdAPI.get().then((currentCwd) => {
-          if (!currentCwd) return;
-          window.cwdAPI.gitStats(currentCwd).then((gs) => {
-            if (gs.files.length > 0) {
-              setChangedFiles((prev) => {
-                const merged = new Set([...prev, ...gs.files]);
-                return [...merged];
-              });
-            }
-          });
+        // Update all tabs that have a CWD set
+        setTabs(prev => {
+          const updated = [...prev];
+          for (const tab of updated) {
+            if (!tab.cwd) continue;
+            window.cwdAPI.gitStats(tab.cwd).then((gs) => {
+              if (gs.files.length > 0) {
+                setTabs(p => p.map(t => {
+                  if (t.id !== tab.id) return t;
+                  const merged = new Set([...t.changedFiles, ...gs.files]);
+                  return { ...t, changedFiles: [...merged] };
+                }));
+              }
+            });
+          }
+          return updated;
         });
       }
     };
-    const unsubs = panels.map(p => window.copilotAPI.onEvent(handler, p.id));
+    const unsubs = allPanelIds.map(pid => window.copilotAPI.onEvent(handler, pid));
     return () => unsubs.forEach(u => u());
-  }, [panels.map(p => p.id).join(',')]);
+  }, [allPanelIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- Tab operations ---
+  const handleAddTab = useCallback(async () => {
+    tabCounter.current += 1;
+    const newTabId = `tab-${tabCounter.current}`;
+    const newTab: ProjectTab = {
+      id: newTabId,
+      cwd: '',
+      gitBranch: null,
+      changedFiles: [],
+      panels: [{ id: `${newTabId}:main`, userPrompt: null, resetKey: 0 }],
+      panelCounter: 0,
+      yoloMode: false,
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newTabId);
+    // Open directory picker for the new tab
+    if (window.cwdAPI) {
+      const dir = await window.cwdAPI.browse([`${newTabId}:main`]);
+      if (dir) {
+        updateTab(newTabId, (tab) => ({ ...tab, cwd: dir }));
+        window.cwdAPI.gitInfo(dir).then((info) => {
+          updateTab(newTabId, (tab) => ({ ...tab, gitBranch: info.isRepo ? (info.branch ?? null) : null }));
+        });
+        window.cwdAPI.gitStats(dir).then((stats) => {
+          if (stats.files.length > 0) {
+            updateTab(newTabId, (tab) => ({ ...tab, changedFiles: stats.files }));
+          }
+        });
+      }
+    }
+  }, [updateTab]);
+
+  const handleCloseTab = useCallback((tabId: string) => {
+    setTabs(prev => {
+      if (prev.length <= 1) return prev;
+      // Destroy all sessions for this tab's panels
+      const tab = prev.find(t => t.id === tabId);
+      if (tab) {
+        for (const panel of tab.panels) {
+          window.copilotAPI?.destroySession(panel.id);
+        }
+      }
+      const next = prev.filter(t => t.id !== tabId);
+      // If closing the active tab, switch to the nearest one
+      setActiveTabId(current => {
+        if (current === tabId) {
+          const closedIdx = prev.findIndex(t => t.id === tabId);
+          return next[Math.min(closedIdx, next.length - 1)]?.id ?? next[0].id;
+        }
+        return current;
+      });
+      return next;
+    });
+  }, []);
+
+  const handleSwitchTab = useCallback((tabId: string) => {
+    setActiveTabId(tabId);
+    // Sync YOLO mode to permission service for the new tab
+    const tab = tabs.find(t => t.id === tabId);
+    if (tab) {
+      window.copilotAPI?.setYoloMode(tab.yoloMode);
+      // Sync CWD to stats for the active tab
+      if (tab.cwd) window.cwdAPI?.set(tab.cwd, tab.panels.map(p => p.id));
+    }
+  }, [tabs]);
 
   return (
     <ThemeProvider>
       <div className={`flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono${superMode ? ' super-border' : ''}`}>
         {/* Title Bar */}
-        <header className="flex items-center justify-center py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-          <div className="absolute left-20 flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <header className="flex items-center justify-center pt-8 pb-2 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+          <div className="absolute left-4 bottom-2 flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <LevelBadge
               compact
               onOpenLeaderboard={() => { setAchievementsTab('stats'); setAchievementsOpen(true); }}
@@ -414,6 +561,16 @@ export default function App() {
           </div>
         </header>
 
+        {/* Project Tab Bar */}
+        <TabBar
+          tabs={tabs}
+          activeTabId={activeTabId}
+          tabActivity={tabActivity}
+          onSwitchTab={handleSwitchTab}
+          onAddTab={handleAddTab}
+          onCloseTab={handleCloseTab}
+        />
+
         {/* CWD Status Bar */}
         <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border-color)] bg-[var(--bg-primary)] text-xs">
           <CwdDropdown
@@ -421,6 +578,7 @@ export default function App() {
             gitBranch={gitBranch}
             onBrowse={handleBrowseCwd}
             onSelectRecent={(dir) => refreshGitInfo(dir)}
+            onBranchSwitch={() => refreshGitInfo(cwd)}
           />
           <span className="text-[var(--border-color)]">|</span>
           <div className="relative">
@@ -535,7 +693,7 @@ export default function App() {
             <button
               onClick={() => {
                 const next = !yoloMode;
-                setYoloMode(next);
+                updateTab(activeTabId, (tab) => ({ ...tab, yoloMode: next }));
                 window.copilotAPI?.setYoloMode(next);
                 SoundManager.getInstance().play(next ? 'yoloOn' : 'yoloOff');
                 if (next) {
@@ -585,7 +743,7 @@ export default function App() {
           <aside className="w-64 shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 flex flex-col gap-2 overflow-hidden">
             <h2 className="text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">Token Dashboard</h2>
             <div className="flex-1 min-h-0">
-              <TokenDashboard key={resetKey} inputTokenCount={inputTokens} contextWindow={availableModels.find(m => m.id === currentModel)?.contextWindow} onStatsUpdate={handleStatsUpdate} panelIds={panels.map(p => p.id)} />
+              <TokenDashboard key={resetKey} inputTokenCount={inputTokens} contextWindow={availableModels.find(m => m.id === currentModel)?.contextWindow} onStatsUpdate={handleStatsUpdate} panelIds={allPanelIds} />
             </div>
             <div className="shrink-0">
               <AvatarMenu
@@ -603,8 +761,8 @@ export default function App() {
                 onSelect={async (session) => {
                   setSessionBrowserOpen(false);
                   if (session.cwd) {
-                    setCwd(session.cwd);
-                    window.cwdAPI?.set(session.cwd);
+                    updateTab(activeTabId, (tab) => ({ ...tab, cwd: session.cwd! }));
+                    window.cwdAPI?.set(session.cwd, panels.map(p => p.id));
                     refreshGitInfo(session.cwd);
                   }
                   // Load conversation history
@@ -614,7 +772,10 @@ export default function App() {
                   handleReset();
                   if (events && events.length > 0) {
                     // Set initialEvents on the main panel after reset
-                    setPanels([{ id: 'main', userPrompt: null, resetKey: Date.now(), initialEvents: events }]);
+                    updateTab(activeTabId, (tab) => ({
+                      ...tab,
+                      panels: [{ id: `${tab.id}:main`, userPrompt: null, resetKey: Date.now(), initialEvents: events }],
+                    }));
                   }
                 }}
                 onClose={() => setSessionBrowserOpen(false)}
@@ -622,7 +783,7 @@ export default function App() {
                   setSessionBrowserOpen(false);
                   handleReset();
                   try {
-                    await window.sessionsAPI?.resume(sessionId, 'main');
+                    await window.sessionsAPI?.resume(sessionId, `${activeTabId}:main`);
                   } catch (err) {
                     console.error('Failed to resume session:', err);
                   }

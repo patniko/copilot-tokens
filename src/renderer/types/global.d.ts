@@ -45,13 +45,21 @@ interface GitAPI {
   diff(): Promise<string>;
   checkout(file: string): Promise<{ success: boolean }>;
   checkoutAll(): Promise<{ success: boolean }>;
+  listBranches(): Promise<string[]>;
+  defaultBranch(): Promise<string>;
+  hasChanges(): Promise<boolean>;
+  switchBranch(branch: string): Promise<{ success: boolean; error?: string }>;
+  createBranch(name: string, base?: string): Promise<{ success: boolean; error?: string }>;
+  stash(message?: string): Promise<{ success: boolean; error?: string }>;
+  stashList(): Promise<{ index: number; message: string; branch: string }[]>;
+  stashPop(index: number): Promise<{ success: boolean; error?: string }>;
 }
 
 interface CwdAPI {
   get(): Promise<string>;
-  set(dir: string): Promise<void>;
+  set(dir: string, panelIds?: string[]): Promise<void>;
   getRecent(): Promise<string[]>;
-  browse(): Promise<string | null>;
+  browse(panelIds?: string[]): Promise<string | null>;
   gitInfo(dir: string): Promise<{ isRepo: boolean; branch?: string }>;
   gitStats(dir: string): Promise<{ filesChanged: number; linesAdded: number; linesRemoved: number; files: string[] }>;
 }
