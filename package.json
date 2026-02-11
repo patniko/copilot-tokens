@@ -7,6 +7,7 @@
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
+    "start:packaged": "electron-forge package && open \"out/Copilot Tokens-darwin-arm64/Copilot Tokens.app\"",
     "make": "electron-forge make",
     "build": "tsc && echo 'Build OK'",
     "lint": "eslint src/",
