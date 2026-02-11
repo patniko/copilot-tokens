@@ -138,8 +138,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return stats.getAllSessions();
   });
 
-  ipcMain.handle('stats:recordSession', (_event, sessionStats: SessionStats) => {
-    stats.recordSession(sessionStats);
+  ipcMain.handle('stats:recordSession', (_event, sessionStats: SessionStats, timestamp?: number) => {
+    stats.recordSession(sessionStats, timestamp);
   });
 
   ipcMain.handle('stats:getLifetimeStats', () => {

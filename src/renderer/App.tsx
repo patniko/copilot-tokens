@@ -325,7 +325,7 @@ export default function App() {
         linesRemoved: stats.linesRemoved,
         toolCalls: stats.toolCalls,
         durationMs,
-      });
+      }, start);
       // Save session replay events
       sessionRecorder.save();
 

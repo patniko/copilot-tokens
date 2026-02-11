@@ -112,9 +112,9 @@ const store = new Store<StoreSchema>({
 });
 
 export class StatsService {
-  recordSession(stats: SessionStats): void {
+  recordSession(stats: SessionStats, timestamp?: number): void {
     const sessions = store.get('sessions');
-    sessions.push({ ...stats, timestamp: Date.now(), cwd: store.get('currentCwd') || undefined });
+    sessions.push({ ...stats, timestamp: timestamp ?? Date.now(), cwd: store.get('currentCwd') || undefined });
     store.set('sessions', sessions);
 
     // Update all-time bests

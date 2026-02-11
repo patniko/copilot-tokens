@@ -74,8 +74,8 @@ contextBridge.exposeInMainWorld('statsAPI', {
   getAllTimeBests(): Promise<Record<string, number>> {
     return ipcRenderer.invoke('stats:getAllTimeBests');
   },
-  recordSession(stats: unknown): Promise<void> {
-    return ipcRenderer.invoke('stats:recordSession', stats);
+  recordSession(stats: unknown, timestamp?: number): Promise<void> {
+    return ipcRenderer.invoke('stats:recordSession', stats, timestamp);
   },
   getLifetimeStats(): Promise<{ lifetimeTokens: number; totalSessions: number; longestStreak: number; currentStreak: number; fastestResponse: number }> {
     return ipcRenderer.invoke('stats:getLifetimeStats');

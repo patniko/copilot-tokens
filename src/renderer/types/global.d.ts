@@ -23,7 +23,7 @@ interface StatsAPI {
   getAllSessions(): Promise<(SessionStats & { timestamp: number; cwd?: string })[]>;
   getTopSessions(limit: number): Promise<unknown[]>;
   getAllTimeBests(): Promise<Partial<Record<keyof SessionStats, number>>>;
-  recordSession(stats: SessionStats): Promise<void>;
+  recordSession(stats: SessionStats, timestamp?: number): Promise<void>;
   getLifetimeStats(): Promise<LifetimeStats>;
   getCurrentSessionRank(totalTokens: number): Promise<number>;
   getAchievements(): Promise<Achievement[]>;
