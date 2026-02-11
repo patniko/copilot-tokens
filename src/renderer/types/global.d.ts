@@ -43,6 +43,8 @@ interface StatsAPI {
 interface GitAPI {
   commit(message: string, files: string[]): Promise<{ success: boolean; hash?: string }>;
   diff(): Promise<string>;
+  checkout(file: string): Promise<{ success: boolean }>;
+  checkoutAll(): Promise<{ success: boolean }>;
 }
 
 interface CwdAPI {

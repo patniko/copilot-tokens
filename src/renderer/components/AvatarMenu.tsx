@@ -155,10 +155,17 @@ export default function AvatarMenu({ onOpenSettings, onOpenAchievements, onOpenP
             {oauthUser && (
               <button
                 onClick={handleLogoutOAuth}
-                className="w-full px-4 py-2.5 text-left text-xs text-[var(--text-secondary)] hover:text-[var(--accent-red,#f85149)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2 border-b border-[var(--border-color)]"
+                className="w-full px-4 py-2.5 text-left text-xs text-[var(--text-secondary)] hover:text-[var(--accent-red,#f85149)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-3 border-b border-[var(--border-color)]"
               >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.75C2 1.784 2.784 1 3.75 1h2.5a.75.75 0 0 1 0 1.5h-2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h2.5a.75.75 0 0 1 0 1.5h-2.5A1.75 1.75 0 0 1 2 13.25Zm6.56 4.5 1.97-1.97a.749.749 0 1 0-1.06-1.06L7.97 5.72a.75.75 0 0 0 0 1.06l1.5 1.5a.749.749 0 1 0 1.06-1.06L8.56 7.25h4.69a.75.75 0 0 1 0 1.5H8.56l1.97 1.97a.749.749 0 1 0-1.06-1.06l-1.5-1.5a.75.75 0 0 1 0-1.06Z"/></svg>
-                Sign out @{oauthUser.login}
+                <img
+                  src={oauthUser.avatarUrl}
+                  alt={oauthUser.login}
+                  className="w-6 h-6 rounded-full shrink-0 opacity-70"
+                />
+                <span>
+                  Sign out <span className="font-medium text-[var(--text-primary)]">@{oauthUser.login}</span>
+                  <span className="ml-1 text-[9px] uppercase opacity-60">(OAuth)</span>
+                </span>
               </button>
             )}
 

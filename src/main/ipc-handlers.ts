@@ -249,6 +249,30 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     });
   });
 
+  ipcMain.handle('git:checkout', async (_event, file: string) => {
+    const cwd = stats.getCwd();
+    if (!cwd) return { success: false };
+    return new Promise<{ success: boolean }>((resolve) => {
+      execFile('git', ['-C', cwd, 'checkout', 'HEAD', '--', file], (err) => {
+        resolve({ success: !err });
+      });
+    });
+  });
+
+  ipcMain.handle('git:checkoutAll', async () => {
+    const cwd = stats.getCwd();
+    if (!cwd) return { success: false };
+    return new Promise<{ success: boolean }>((resolve) => {
+      execFile('git', ['-C', cwd, 'checkout', 'HEAD', '--', '.'], (err) => {
+        if (err) { resolve({ success: false }); return; }
+        // Also clean untracked files
+        execFile('git', ['-C', cwd, 'clean', '-fd'], (err2) => {
+          resolve({ success: !err2 });
+        });
+      });
+    });
+  });
+
   ipcMain.handle('cwd:get', () => {
     return stats.getCwd();
   });

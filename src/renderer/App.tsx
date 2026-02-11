@@ -176,6 +176,14 @@ export default function App() {
     }
   }, []);
 
+  const refreshChangedFiles = useCallback(() => {
+    if (window.cwdAPI && cwd) {
+      window.cwdAPI.gitStats(cwd).then((stats) => {
+        setChangedFiles(stats.files);
+      });
+    }
+  }, [cwd]);
+
   const handleModelSwitch = useCallback((modelId: string) => {
     setCurrentModel(modelId);
     setModelDropdownOpen(false);
@@ -402,7 +410,7 @@ export default function App() {
             </h1>
           </div>
           <div className="absolute right-4 flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} onCommitSuccess={() => triggerBadge('badge-first-commit')} />
+            <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} onCommitSuccess={() => triggerBadge('badge-first-commit')} onFilesChanged={refreshChangedFiles} />
           </div>
         </header>
 

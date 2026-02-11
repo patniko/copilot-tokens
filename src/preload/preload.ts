@@ -128,6 +128,12 @@ contextBridge.exposeInMainWorld('gitAPI', {
   diff(): Promise<string> {
     return ipcRenderer.invoke('git:diff');
   },
+  checkout(file: string): Promise<{ success: boolean }> {
+    return ipcRenderer.invoke('git:checkout', file);
+  },
+  checkoutAll(): Promise<{ success: boolean }> {
+    return ipcRenderer.invoke('git:checkoutAll');
+  },
 });
 
 contextBridge.exposeInMainWorld('utilAPI', {

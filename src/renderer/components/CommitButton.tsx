@@ -9,11 +9,12 @@ interface CommitButtonProps {
   visible: boolean;
   onSendFeedback?: (feedback: string) => void;
   onCommitSuccess?: () => void;
+  onFilesChanged?: () => void;
 }
 
-type ModalStep = 'reels' | 'editor' | 'diff' | 'committing' | 'success' | 'error';
+type ModalStep = 'editor' | 'diff' | 'committing' | 'success' | 'error';
 
-export default function CommitButton({ changedFiles, visible, onSendFeedback, onCommitSuccess }: CommitButtonProps) {
+export default function CommitButton({ changedFiles, visible, onSendFeedback, onCommitSuccess, onFilesChanged }: CommitButtonProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const disabled = !visible;
 
@@ -48,6 +49,7 @@ export default function CommitButton({ changedFiles, visible, onSendFeedback, on
             onClose={() => setModalOpen(false)}
             onSendFeedback={onSendFeedback}
             onCommitSuccess={onCommitSuccess}
+            onFilesChanged={onFilesChanged}
           />
         )}
       </AnimatePresence>
@@ -60,63 +62,56 @@ interface CommitModalProps {
   onClose: () => void;
   onSendFeedback?: (feedback: string) => void;
   onCommitSuccess?: () => void;
+  onFilesChanged?: () => void;
 }
 
-function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }: CommitModalProps) {
+function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess, onFilesChanged }: CommitModalProps) {
   const { play } = useSound();
-  const [step, setStep] = useState<ModalStep>('reels');
-  const [lockedCount, setLockedCount] = useState(0);
+  const [step, setStep] = useState<ModalStep>('editor');
   const [message, setMessage] = useState('');
   const [commitHash, setCommitHash] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [diffContent, setDiffContent] = useState('');
   const [diffLoading, setDiffLoading] = useState(false);
+  const [undoConfirm, setUndoConfirm] = useState<string | null>(null); // file path or '__all__'
+  const [localFiles, setLocalFiles] = useState(changedFiles);
   const closingRef = useRef(false);
-  const reelTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const autoCloseTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Reel animation: lock files one by one
-  useEffect(() => {
-    if (step !== 'reels') return;
-    if (changedFiles.length === 0) {
-      setStep('editor');
-      return;
-    }
-
-    let i = 0;
-    // Scale interval so the total reel animation stays under ~1s
-    const perFile = Math.min(200, Math.max(30, 800 / changedFiles.length));
-    const interval = setInterval(() => {
-      i++;
-      setLockedCount(i);
-      if (i >= changedFiles.length) {
-        clearInterval(interval);
-        reelTimeoutRef.current = setTimeout(() => setStep('editor'), 300);
-      }
-    }, perFile);
-    return () => {
-      clearInterval(interval);
-      clearTimeout(reelTimeoutRef.current);
-    };
-  }, [step, changedFiles.length]);
-
-  // Clean up auto-close timeout on unmount
   useEffect(() => {
     return () => clearTimeout(autoCloseTimeoutRef.current);
   }, []);
+
+  const handleUndo = useCallback(async (file: string) => {
+    const result = await window.gitAPI.checkout(file);
+    if (result.success) {
+      setLocalFiles((prev) => prev.filter((f) => f !== file));
+      onFilesChanged?.();
+    }
+    setUndoConfirm(null);
+  }, [onFilesChanged]);
+
+  const handleUndoAll = useCallback(async () => {
+    const result = await window.gitAPI.checkoutAll();
+    if (result.success) {
+      setLocalFiles([]);
+      onFilesChanged?.();
+      onClose();
+    }
+    setUndoConfirm(null);
+  }, [onFilesChanged, onClose]);
 
   const handleConfirm = useCallback(async () => {
     const msg = message.trim() || 'feat: session changes';
     setStep('committing');
     try {
-      const result = await window.gitAPI.commit(msg, changedFiles);
+      const result = await window.gitAPI.commit(msg, localFiles);
       if (result.success) {
         setCommitHash(result.hash ?? '');
         setStep('success');
         play('commit');
         onCommitSuccess?.();
         confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-        // Auto-close after 2s
         autoCloseTimeoutRef.current = setTimeout(() => {
           if (!closingRef.current) {
             closingRef.current = true;
@@ -131,7 +126,7 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
       setErrorMsg(err instanceof Error ? err.message : 'Unknown error');
       setStep('error');
     }
-  }, [message, changedFiles, play, onClose]);
+  }, [message, localFiles, play, onClose, onCommitSuccess]);
 
   const handleRetry = useCallback(() => {
     setErrorMsg('');
@@ -143,6 +138,7 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      transition={{ duration: 0.1 }}
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
       onClick={(e) => {
@@ -150,10 +146,10 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
       }}
     >
       <motion.div
-        initial={{ scale: 0.5, opacity: 0 }}
+        initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.5, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ duration: 0.12 }}
         className={`glass-card p-6 flex flex-col gap-4 ${step === 'diff' ? 'w-full h-full max-w-none max-h-none m-4 rounded-xl' : 'w-full max-w-[700px]'}`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -161,48 +157,48 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
           🎰 COMMIT
         </h2>
 
-        {/* Step 1: Reels */}
-        {(step === 'reels' || step === 'editor' || step === 'committing' || step === 'success') && (
-          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
-            {changedFiles.map((file, i) => {
-              const locked = i < lockedCount;
-              return (
-                <motion.div
-                  key={file}
-                  className="flex items-center gap-2 text-sm font-mono px-2 py-1 rounded"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.03)' }}
-                  initial={{ y: -20, opacity: 0 }}
-                  animate={{
-                    y: locked ? 0 : [0, -8, 8, -4, 4, 0],
-                    opacity: 1,
-                  }}
-                  transition={
-                    locked
-                      ? { type: 'spring', stiffness: 300 }
-                      : { y: { repeat: Infinity, duration: 0.3 }, opacity: { duration: 0.2 } }
-                  }
-                >
-                  <span className="w-5 text-center">
-                    {locked ? (
-                      <span style={{ color: 'var(--accent-green)' }}>✓</span>
-                    ) : (
-                      <span className="animate-pulse">⋯</span>
-                    )}
-                  </span>
-                  <span className="truncate text-[var(--text-primary)]">{file}</span>
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Step 2: Editor */}
+        {/* Editor step */}
         {step === 'editor' && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col gap-3"
-          >
+          <div className="flex flex-col gap-3">
+            {/* File list with undo buttons */}
+            <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+              {localFiles.map((file) => (
+                <div
+                  key={file}
+                  className="flex items-center gap-2 text-sm font-mono px-2 py-1 rounded group"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.03)' }}
+                >
+                  <span className="w-5 text-center" style={{ color: 'var(--accent-green)' }}>✓</span>
+                  <span className="truncate text-[var(--text-primary)] flex-1">{file}</span>
+                  {undoConfirm === file ? (
+                    <span className="flex items-center gap-1 shrink-0">
+                      <span className="text-[10px] text-[var(--text-secondary)]">Revert?</span>
+                      <button
+                        onClick={() => handleUndo(file)}
+                        className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer font-bold"
+                        style={{ backgroundColor: 'var(--accent-red)', color: 'white' }}
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setUndoConfirm(null)}
+                        className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer text-[var(--text-secondary)]"
+                      >
+                        No
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setUndoConfirm(file)}
+                      className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-secondary)] hover:text-[var(--accent-red)]"
+                    >
+                      Undo
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -216,26 +212,65 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
               }}
             />
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              {changedFiles.length} file{changedFiles.length !== 1 ? 's' : ''} changed
+              {localFiles.length} file{localFiles.length !== 1 ? 's' : ''} changed
             </p>
+
+            {/* Undo All confirmation */}
+            {undoConfirm === '__all__' && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid var(--accent-red)' }}>
+                <span className="text-[var(--accent-red)] font-bold">Revert all changes?</span>
+                <span className="text-[var(--text-secondary)]">This cannot be undone.</span>
+                <div className="ml-auto flex gap-1">
+                  <button
+                    onClick={handleUndoAll}
+                    className="px-2 py-1 rounded text-[10px] font-bold cursor-pointer"
+                    style={{ backgroundColor: 'var(--accent-red)', color: 'white' }}
+                  >
+                    Yes, revert all
+                  </button>
+                  <button
+                    onClick={() => setUndoConfirm(null)}
+                    className="px-2 py-1 rounded text-[10px] cursor-pointer text-[var(--text-secondary)]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2 justify-between">
-              <button
-                onClick={async () => {
-                  setDiffLoading(true);
-                  setStep('diff');
-                  const d = await window.gitAPI.diff();
-                  setDiffContent(d);
-                  setDiffLoading(false);
-                }}
-                className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition-opacity hover:opacity-80"
-                style={{
-                  backgroundColor: 'var(--bg-secondary)',
-                  color: 'var(--accent-blue)',
-                  border: '1px solid var(--border-color)',
-                }}
-              >
-                Review Changes
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    setDiffLoading(true);
+                    setStep('diff');
+                    const d = await window.gitAPI.diff();
+                    setDiffContent(d);
+                    setDiffLoading(false);
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition-opacity hover:opacity-80"
+                  style={{
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--accent-blue)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                >
+                  Review Changes
+                </button>
+                {localFiles.length > 1 && undoConfirm !== '__all__' && (
+                  <button
+                    onClick={() => setUndoConfirm('__all__')}
+                    className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition-opacity hover:opacity-80"
+                    style={{
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: 'var(--accent-red)',
+                      border: '1px solid var(--border-color)',
+                    }}
+                  >
+                    Undo All
+                  </button>
+                )}
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={onClose}
@@ -250,23 +285,20 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
                 </button>
                 <button
                   onClick={handleConfirm}
-                  className="px-4 py-2 rounded-lg text-sm font-bold text-black cursor-pointer transition-opacity hover:opacity-90"
+                  disabled={localFiles.length === 0}
+                  className="px-4 py-2 rounded-lg text-sm font-bold text-black cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-40"
                   style={{ backgroundColor: 'var(--accent-green)' }}
                 >
                   CONFIRM
                 </button>
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
 
-        {/* Step 2b: Diff viewer */}
+        {/* Diff viewer */}
         {step === 'diff' && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col gap-3 flex-1 min-h-0"
-          >
+          <div className="flex flex-col gap-3 flex-1 min-h-0">
             {diffLoading ? (
               <div className="flex items-center justify-center py-8 text-sm text-[var(--text-secondary)]">
                 Loading diff…
@@ -280,7 +312,7 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
               </div>
             )}
 
-            <div className="flex gap-2 justify-end">
+            <div className="flex gap-2 justify-between">
               <button
                 onClick={() => setStep('editor')}
                 className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition-opacity hover:opacity-80"
@@ -290,20 +322,24 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
                   border: '1px solid var(--border-color)',
                 }}
               >
-                Back
+                ← Back
               </button>
               <button
-                onClick={handleConfirm}
-                className="px-4 py-2 rounded-lg text-sm font-bold text-black cursor-pointer transition-opacity hover:opacity-90"
-                style={{ backgroundColor: 'var(--accent-green)' }}
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition-opacity hover:opacity-80"
+                style={{
+                  backgroundColor: 'var(--bg-secondary)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border-color)',
+                }}
               >
-                CONFIRM
+                Close
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
 
-        {/* Step 3: Committing spinner */}
+        {/* Committing spinner */}
         {step === 'committing' && (
           <div className="flex flex-col items-center gap-3 py-4">
             <motion.div
@@ -320,25 +356,7 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
 
         {/* Success */}
         {step === 'success' && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center gap-2 py-4"
-          >
-            <AnimatePresence>
-              {changedFiles.map((file, i) => (
-                <motion.span
-                  key={file}
-                  className="text-xs font-mono"
-                  style={{ color: 'var(--text-secondary)' }}
-                  initial={{ opacity: 1, scale: 1 }}
-                  animate={{ opacity: 0, scale: 0, y: -20 }}
-                  transition={{ delay: Math.min(i * 0.02, 0.5), duration: 0.3 }}
-                >
-                  {file}
-                </motion.span>
-              ))}
-            </AnimatePresence>
+          <div className="flex flex-col items-center gap-2 py-4">
             <span className="text-3xl">📦</span>
             <p className="text-sm font-bold" style={{ color: 'var(--accent-green)' }}>
               Committed!
@@ -348,16 +366,12 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
                 {commitHash.slice(0, 7)}
               </p>
             )}
-          </motion.div>
+          </div>
         )}
 
         {/* Error */}
         {step === 'error' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-col items-center gap-3 py-4"
-          >
+          <div className="flex flex-col items-center gap-3 py-4">
             <p className="text-sm text-center" style={{ color: 'var(--accent-red)' }}>
               {errorMsg}
             </p>
@@ -381,7 +395,7 @@ function CommitModal({ changedFiles, onClose, onSendFeedback, onCommitSuccess }:
                 RETRY
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
       </motion.div>
     </motion.div>
