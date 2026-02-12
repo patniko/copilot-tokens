@@ -4,6 +4,7 @@ import { homedir } from 'os';
 import { app } from 'electron';
 import { execSync } from 'child_process';
 import Store from 'electron-store';
+import { getPersistedOAuthToken, getActiveSource } from './auth-service';
 
 // Dynamic import to load ESM SDK in Electron's CJS main process
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -539,6 +540,14 @@ export class CopilotService {
         opts.env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
       }
 
+      // Pass OAuth token to the SDK so it uses the same auth as the app
+      if (getActiveSource() === 'oauth') {
+        const token = getPersistedOAuthToken();
+        if (token) {
+          opts.githubToken = token;
+        }
+      }
+
       this.client = new CopilotClient(opts as ConstructorParameters<typeof CopilotClient>[0]);
       await this.client.start();
       this.started = true;
@@ -688,6 +697,19 @@ export class CopilotService {
         // Session couldn't be resumed; ensureSession will create a fresh one on next message
       }
     }
+  }
+
+  /** Tear down the client entirely so it re-initialises with fresh auth on next use. */
+  async restartClient(): Promise<void> {
+    for (const [, session] of this.sessions) {
+      await session.destroy().catch(() => {});
+    }
+    this.sessions.clear();
+    if (this.client) {
+      await (this.client as unknown as { stop?: () => Promise<void> }).stop?.().catch(() => {});
+    }
+    this.client = null as unknown as CopilotClientType;
+    this.started = false;
   }
 
   private abortResolves = new Map<string, () => void>();

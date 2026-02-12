@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSound } from '../hooks/useSound';
+import { useVoiceInput } from '../hooks/useVoiceInput';
 
 interface Attachment {
   path: string;
@@ -41,6 +42,19 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { play } = useSound();
+  const voice = useVoiceInput();
+  const prevListeningRef = useRef(false);
+
+  // When voice input stops, append transcribed text to prompt
+  useEffect(() => {
+    if (prevListeningRef.current && !voice.isListening) {
+      const text = (voice.finalTranscript + voice.interimTranscript).trim();
+      if (text) {
+        setPrompt(prev => (prev ? prev + ' ' : '') + text);
+      }
+    }
+    prevListeningRef.current = voice.isListening;
+  }, [voice.isListening, voice.finalTranscript, voice.interimTranscript]);
 
   const setGenerating = useCallback(
     (value: boolean) => {
@@ -313,17 +327,83 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
           }}
         />
 
-        <textarea
-          ref={textareaRef}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder={attachments.length > 0 ? 'Add a message or press Enter to send…' : isGenerating ? 'Type to steer or queue next message…' : 'Enter your prompt…'}
-          rows={1}
-          className="flex-1 bg-transparent outline-none text-[var(--text-primary)] placeholder-[var(--text-secondary)] resize-none rounded-lg border border-[var(--border-color)] px-4 py-3 focus:border-[var(--accent-purple)] focus:shadow-[0_0_8px_var(--accent-purple)] transition-shadow"
-          style={{ lineHeight: `${LINE_HEIGHT}px` }}
-        />
+        <div className="relative flex-1">
+          {/* Waveform overlay when listening */}
+          <AnimatePresence>
+            {voice.isListening && (
+              <motion.div
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-lg border border-[var(--accent-purple)] bg-[var(--bg-secondary)]"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {/* Waveform bars */}
+                <div className="flex items-center justify-center gap-[2px] h-8 px-4 w-full">
+                  {voice.audioLevels.map((level, i) => (
+                    <div
+                      key={i}
+                      className="w-[3px] rounded-full bg-[var(--accent-purple)]"
+                      style={{
+                        height: `${Math.max(3, level * 28)}px`,
+                        opacity: 0.4 + level * 0.6,
+                        transition: 'height 80ms ease-out, opacity 80ms ease-out',
+                      }}
+                    />
+                  ))}
+                </div>
+                {/* Streaming transcript */}
+                {(voice.finalTranscript || voice.interimTranscript) && (
+                  <p className="text-xs text-[var(--text-secondary)] mt-1 px-4 truncate max-w-full">
+                    <span className="text-[var(--text-primary)]">{voice.finalTranscript}</span>
+                    {voice.interimTranscript && (
+                      <span className="text-[var(--text-secondary)] italic">{voice.interimTranscript}</span>
+                    )}
+                  </p>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <textarea
+            ref={textareaRef}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={attachments.length > 0 ? 'Add a message or press Enter to send…' : isGenerating ? 'Type to steer or queue next message…' : 'Enter your prompt…'}
+            rows={1}
+            className="w-full bg-transparent outline-none text-[var(--text-primary)] placeholder-[var(--text-secondary)] resize-none rounded-lg border border-[var(--border-color)] px-4 py-3 pr-10 focus:border-[var(--accent-purple)] focus:shadow-[0_0_8px_var(--accent-purple)] transition-shadow"
+            style={{ lineHeight: `${LINE_HEIGHT}px` }}
+          />
+
+          {/* Mic / Stop button overlay */}
+          {voice.isSupported && (
+            <button
+              onClick={() => voice.isListening ? voice.stop() : voice.start()}
+              className={`absolute right-2.5 bottom-2.5 z-20 flex items-center justify-center w-7 h-7 rounded-full transition-all cursor-pointer ${
+                voice.isListening
+                  ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--accent-purple)] opacity-50 hover:opacity-100'
+              }`}
+              title={voice.isListening ? 'Stop recording' : 'Voice input'}
+            >
+              {voice.isListening ? (
+                /* Stop icon */
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                  <rect x="1" y="1" width="10" height="10" rx="1.5" />
+                </svg>
+              ) : (
+                /* Microphone icon */
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="1" width="6" height="12" rx="3" />
+                  <path d="M5 10a7 7 0 0 0 14 0" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+              )}
+            </button>
+          )}
+        </div>
 
         <AnimatePresence mode="wait">
           {isGenerating ? (

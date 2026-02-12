@@ -314,12 +314,12 @@ export default function App() {
         if (!ev || typeof ev !== 'object') return;
         const tabId = panelToTab.get(pid);
         if (!tabId) return;
-        if (ev.type === 'assistant.turn_start') {
-          setTabActivity(prev => ({ ...prev, [tabId]: 'active' }));
-        } else if (ev.type === 'ask_user.request') {
-          setTabActivity(prev => ({ ...prev, [tabId]: 'waiting' }));
+        // Use message_delta as a reliable "active" signal (always emitted, unlike turn_start which is gated)
+        if (ev.type === 'assistant.turn_start' || ev.type === 'assistant.message_delta' || ev.type === 'tool.start') {
+          setTabActivity(prev => prev[tabId] === 'active' ? prev : { ...prev, [tabId]: 'active' });
         } else if (ev.type === 'session.idle') {
-          setTabActivity(prev => ({ ...prev, [tabId]: 'idle' }));
+          // Mark as 'done' so inactive tabs show a completion indicator; clear on switch
+          setTabActivity(prev => prev[tabId] === 'idle' ? prev : { ...prev, [tabId]: 'done' });
         }
       };
       return window.copilotAPI.onEvent(handler, pid);
@@ -327,12 +327,27 @@ export default function App() {
     return () => handlers.forEach(u => u());
   }, [allPanelIds.join(','), tabs]);
 
-  // Set tab to waiting when permission dialog is shown
+  // Set tab to waiting when permission dialog or ask_user is shown
   useEffect(() => {
     if (permissionRequest) {
       setTabActivity(prev => ({ ...prev, [activeTabId]: 'waiting' }));
     }
   }, [permissionRequest, activeTabId]);
+
+  // Bridge ask_user requests to tab activity (ask_user doesn't go through copilot:event channel)
+  useEffect(() => {
+    if (!window.copilotAPI?.onAskUserRequest) return;
+    return window.copilotAPI.onAskUserRequest(() => {
+      setTabActivity(prev => ({ ...prev, [activeTabId]: 'waiting' }));
+    });
+  }, [activeTabId]);
+
+  // Clear 'done' indicator when switching to a tab
+  useEffect(() => {
+    setTabActivity(prev =>
+      prev[activeTabId] === 'done' ? { ...prev, [activeTabId]: 'idle' } : prev
+    );
+  }, [activeTabId]);
 
   const handlePanelSend = useCallback((panelId: string, prompt: string) => {
     if (!currentModel) {

@@ -631,19 +631,25 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const user = await auth.fetchUser(token);
     auth.persistOAuth(token, user);
     auth.setActiveSource('oauth');
+    // Restart the SDK client so it uses the new OAuth token
+    await copilot.restartClient();
     return user;
   });
 
-  ipcMain.handle('auth:setActiveSource', (_event, source: 'cli' | 'oauth') => {
+  ipcMain.handle('auth:setActiveSource', async (_event, source: 'cli' | 'oauth') => {
     auth.setActiveSource(source);
+    // Restart the SDK client so it picks up the new auth credentials
+    await copilot.restartClient();
   });
 
   ipcMain.handle('auth:getActiveSource', () => {
     return auth.getActiveSource();
   });
 
-  ipcMain.handle('auth:logoutOAuth', () => {
+  ipcMain.handle('auth:logoutOAuth', async () => {
     auth.clearOAuth();
+    // Restart the SDK client so it falls back to CLI auth
+    await copilot.restartClient();
   });
 
   // ── Packs ──

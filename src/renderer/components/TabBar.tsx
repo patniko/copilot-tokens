@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 
-export type TabActivity = 'idle' | 'active' | 'waiting';
+export type TabActivity = 'idle' | 'active' | 'waiting' | 'done';
 
 export interface ProjectTab {
   id: string;
@@ -38,7 +38,7 @@ export default function TabBar({ tabs, activeTabId, tabActivity, onSwitchTab, on
 
   return (
     <div className="flex items-center border-b border-[var(--border-color)] bg-[var(--bg-secondary)]" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-      <div ref={scrollRef} className="flex items-end overflow-x-auto flex-1 min-w-0 no-scrollbar" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div ref={scrollRef} className="flex items-end overflow-x-auto min-w-0 no-scrollbar" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           const activity = tabActivity[tab.id] ?? 'idle';
@@ -53,16 +53,21 @@ export default function TabBar({ tabs, activeTabId, tabActivity, onSwitchTab, on
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)]/50'
               }`}
             >
-              {activity === 'active' && (
+              {activity === 'active' && !isActive && (
                 <span className="relative flex h-2 w-2 shrink-0" title="Agent working">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
                 </span>
               )}
-              {activity === 'waiting' && (
+              {activity === 'waiting' && !isActive && (
                 <span className="relative flex h-2 w-2 shrink-0" title="Waiting for input">
                   <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                </span>
+              )}
+              {activity === 'done' && !isActive && (
+                <span className="relative flex h-2 w-2 shrink-0" title="Agent finished">
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-400" />
                 </span>
               )}
               {tab.yoloMode && <span className="text-[var(--accent-gold)] text-[8px]">⚡</span>}
@@ -78,15 +83,15 @@ export default function TabBar({ tabs, activeTabId, tabActivity, onSwitchTab, on
             </button>
           );
         })}
+        <button
+          onClick={onAddTab}
+          className="px-2 py-1.5 text-[var(--text-secondary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer shrink-0 text-sm sticky right-0 bg-[var(--bg-secondary)]"
+          title="New project tab"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          +
+        </button>
       </div>
-      <button
-        onClick={onAddTab}
-        className="px-2 py-1.5 text-[var(--text-secondary)] hover:text-[var(--accent-gold)] transition-colors cursor-pointer shrink-0 text-sm"
-        title="New project tab"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      >
-        +
-      </button>
     </div>
   );
 }
