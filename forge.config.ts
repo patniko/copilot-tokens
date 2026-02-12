@@ -17,6 +17,9 @@ const config: ForgeConfig = {
       unpack: '**/node_modules/@github/{copilot,copilot-*}/**',
     },
     icon: './icon',
+    extendInfo: {
+      NSMicrophoneUsageDescription: 'Copilot Tokens uses the microphone for voice-to-text input.',
+    },
     osxSign: {
       optionsForFile: () => ({
         entitlements: './entitlements.plist',

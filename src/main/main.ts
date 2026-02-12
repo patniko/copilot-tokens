@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, session } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers } from './ipc-handlers';
 import { CopilotService } from './copilot-service';
@@ -29,6 +29,11 @@ function createWindow(): void {
   });
 
   registerIpcHandlers(mainWindow);
+
+  // Allow microphone access for voice input (Web Speech API)
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === 'media');
+  });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
