@@ -320,11 +320,16 @@ const settingsStore = new Store<SettingsStoreSchema>({
   defaults: {
     systemPrompt: { mode: 'append', content: '' },
     features: defaultFeatures,
-    reasoningEffort: 'medium',
+    reasoningEffort: null,
     customAgents: [],
     cliMode: { type: 'bundled' },
   },
 });
+
+// Migrate: old default of 'medium' should become null (let model use its natural reasoning depth)
+if (settingsStore.get('reasoningEffort') === 'medium') {
+  settingsStore.set('reasoningEffort', null);
+}
 
 export class CopilotService {
   private static instance: CopilotService;
