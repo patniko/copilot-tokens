@@ -371,6 +371,8 @@ export class CopilotService {
 
   /** Set CWD for specific panels (tab-scoped) without affecting other tabs' sessions. */
   setWorkingDirectoryForPanels(panelIds: string[], dir: string): void {
+    // Keep global fallback in sync so new panels default to the latest CWD
+    this.workingDirectory = dir;
     for (const pid of panelIds) {
       this.panelCwds.set(pid, dir);
       const session = this.sessions.get(pid);
@@ -473,7 +475,8 @@ export class CopilotService {
       model: this.model,
       streaming: true,
     };
-    if (this.workingDirectory) opts.workingDirectory = this.workingDirectory;
+    const cwd = this.panelCwds.get(panelId) || this.workingDirectory;
+    if (cwd) opts.workingDirectory = cwd;
     const session = await this.client!.resumeSession(sessionId, opts as Parameters<CopilotClientType['resumeSession']>[1]);
     this.sessions.set(panelId, session);
   }
@@ -666,12 +669,13 @@ export class CopilotService {
   }
 
   /** Build the common options used when resuming a session. */
-  private buildResumeOpts(): Record<string, unknown> {
+  private buildResumeOpts(panelId?: string): Record<string, unknown> {
     const opts: Record<string, unknown> = {
       model: this.model,
       streaming: true,
     };
-    if (this.workingDirectory) opts.workingDirectory = this.workingDirectory;
+    const cwd = (panelId && this.panelCwds.get(panelId)) || this.workingDirectory;
+    if (cwd) opts.workingDirectory = cwd;
     if (this.permissionCallback) {
       const cb = this.permissionCallback;
       opts.onPermissionRequest = async (request: Record<string, unknown>) => {
@@ -694,7 +698,7 @@ export class CopilotService {
       await session.destroy().catch(() => {});
       this.sessions.delete(panelId);
       try {
-        const opts = this.buildResumeOpts();
+        const opts = this.buildResumeOpts(panelId);
         opts.disableResume = true;
         const resumed = await this.client!.resumeSession(sid, opts as Parameters<CopilotClientType['resumeSession']>[1]);
         this.sessions.set(panelId, resumed);
@@ -984,7 +988,7 @@ export class CopilotService {
         // Try to resume the old session (preserves chat history)
         try {
           console.log('[CopilotService] Stale session detected, attempting resume:', staleId);
-          const opts = this.buildResumeOpts();
+          const opts = this.buildResumeOpts(panelId);
           const resumed = await this.client!.resumeSession(staleId, opts as Parameters<CopilotClientType['resumeSession']>[1]);
           this.sessions.set(panelId, resumed);
         } catch {

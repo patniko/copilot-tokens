@@ -96,8 +96,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('copilot:setYoloMode', async (_event, enabled: boolean) => {
     permissions.yoloMode = enabled;
-    // Recycle sessions so the CLI re-evaluates permissions under the new setting
-    await copilot.recycleAllSessions();
+    // No need to recycle sessions — the permission handler evaluates yoloMode
+    // on each request, so it takes effect immediately without disruption.
   });
 
   ipcMain.handle('copilot:getYoloMode', () => {
