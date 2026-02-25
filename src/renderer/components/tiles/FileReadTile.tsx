@@ -16,9 +16,7 @@ function friendlyPath(p: string): { name: string; dir: string } {
 
 export default function FileReadTile({ path, content, isRunning }: FileReadTileProps) {
   const lines = content ? content.split('\n') : [];
-  const isTruncated = lines.length > 10;
   const [expanded, setExpanded] = useState(false);
-  const visibleLines = expanded ? lines : lines.slice(0, 10);
   const { name, dir } = friendlyPath(path);
 
   return (
@@ -45,7 +43,7 @@ export default function FileReadTile({ path, content, isRunning }: FileReadTileP
       </div>
 
       {/* Content */}
-      {content && (
+      {content && expanded && (
         <motion.pre
           className="text-xs font-mono overflow-x-auto rounded-lg p-3"
           style={{
@@ -56,18 +54,18 @@ export default function FileReadTile({ path, content, isRunning }: FileReadTileP
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5 }}
         >
-          {visibleLines.join('\n')}
+          {lines.join('\n')}
         </motion.pre>
       )}
 
-      {/* Show more */}
-      {isTruncated && (
+      {/* Toggle */}
+      {content && (
         <button
           onClick={() => setExpanded(!expanded)}
           className="mt-2 text-xs cursor-pointer"
           style={{ color: 'var(--accent-blue)', background: 'none', border: 'none' }}
         >
-          {expanded ? 'Show less' : `Show more (${lines.length - 10} more lines)`}
+          {expanded ? 'Hide content' : `See all ${lines.length} lines`}
         </button>
       )}
     </div>

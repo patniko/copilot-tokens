@@ -768,7 +768,7 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
                     modelMetrics={msg.data.modelMetrics as Record<string, { requests: { count: number; cost: number }; usage: { inputTokens: number; outputTokens: number } }>}
                   />
                 )}
-                {msg.type === 'session_event' && (msg.eventType === 'turn_start' || msg.eventType === 'turn_end') && (
+                {msg.type === 'session_event' && (msg.eventType === 'turn_start' || msg.eventType === 'turn_end') && String(msg.data.turnId) !== '0' && (
                   <TurnIndicator phase={msg.eventType === 'turn_start' ? 'start' : 'end'} turnId={String(msg.data.turnId)} />
                 )}
                 {msg.type === 'session_event' && msg.eventType === 'skill' && (
