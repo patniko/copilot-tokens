@@ -57,6 +57,23 @@ export const themes: Record<string, Theme> = {
     },
     effects: { neonGlow: false, particles: true },
   },
+  'retro-terminal': {
+    name: 'retro-terminal',
+    label: 'Retro Terminal',
+    colors: {
+      bgPrimary: '#0a0e0a',
+      bgSecondary: '#0f1a0f',
+      border: '#1a3a1a',
+      textPrimary: '#33ff33',
+      textSecondary: '#1a9a1a',
+      accentGold: '#33ff33',
+      accentPurple: '#00ccaa',
+      accentBlue: '#00bbff',
+      accentGreen: '#33ff33',
+      accentRed: '#ff4136',
+    },
+    effects: { neonGlow: false, particles: false },
+  },
   minimal: {
     name: 'minimal',
     label: 'Minimal',

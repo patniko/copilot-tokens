@@ -87,6 +87,38 @@ body {
   background: var(--text-secondary);
 }
 
+/* Retro Terminal — green phosphor CRT glow + scanlines */
+[data-theme="retro-terminal"] {
+  --neon-glow: 0 0 8px rgba(51, 255, 51, 0.4), 0 0 18px rgba(51, 255, 51, 0.15);
+}
+[data-theme="retro-terminal"] .neon-glow {
+  text-shadow: 0 0 8px rgba(51, 255, 51, 0.5), 0 0 18px rgba(51, 255, 51, 0.2);
+}
+[data-theme="retro-terminal"] .neon-glow-box {
+  box-shadow: 0 0 8px rgba(51, 255, 51, 0.35), 0 0 18px rgba(51, 255, 51, 0.12);
+}
+[data-theme="retro-terminal"] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.12) 2px,
+    rgba(0, 0, 0, 0.12) 4px
+  );
+}
+[data-theme="retro-terminal"] .super-border {
+  box-shadow:
+    inset 0 0 1px 1px rgba(51, 255, 51, 0.3),
+    0 0 12px rgba(51, 255, 51, 0.15),
+    0 0 24px rgba(51, 255, 51, 0.05);
+  border: 1px solid rgba(51, 255, 51, 0.25);
+}
+
 /* Logo jump-and-flip for active agent */
 @keyframes logo-bounce {
   0% { transform: translateY(0) rotate(0deg); }
