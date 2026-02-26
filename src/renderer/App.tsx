@@ -64,6 +64,12 @@ export default function App() {
   const [demoActive, setDemoActive] = useState(false);
   const demoReplayRef = useRef<DemoReplayService | null>(null);
 
+  // Fullscreen state (traffic lights hidden in fullscreen)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    return window.windowAPI?.onFullscreenChange(setIsFullscreen);
+  }, []);
+
   // --- Tab state ---
   const tabCounter = useRef(0);
   const initialTabId = `tab-${tabCounter.current}`;
@@ -587,7 +593,7 @@ export default function App() {
       <div className={`flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono${superMode ? ' super-border' : ''}`}>
         {/* Title Bar */}
         <header className="flex items-center justify-center py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-          <div className="absolute left-20 flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <div className={`absolute ${isFullscreen ? 'left-4' : 'left-20'} flex items-center transition-all`} style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <LevelBadge
               compact
               onOpenLeaderboard={() => { setAchievementsTab('stats'); setAchievementsOpen(true); }}
