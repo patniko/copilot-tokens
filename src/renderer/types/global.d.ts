@@ -136,6 +136,10 @@ interface AuthAPI {
   logoutOAuth(): Promise<void>;
 }
 
+interface WindowAPI {
+  onFullscreenChange(callback: (isFullscreen: boolean) => void): () => void;
+}
+
 declare global {
   interface Window {
     copilotAPI: CopilotAPI;
@@ -151,6 +155,7 @@ declare global {
     featuresAPI: FeaturesAPI;
     sessionsAPI: SessionsAPI;
     agentsAPI: AgentsAPI;
+    windowAPI: WindowAPI;
   }
 }
 

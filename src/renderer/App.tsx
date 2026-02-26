@@ -586,8 +586,8 @@ export default function App() {
     <ThemeProvider>
       <div className={`flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono${superMode ? ' super-border' : ''}`}>
         {/* Title Bar */}
-        <header className="flex items-center justify-center pt-8 pb-2 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-          <div className="absolute left-4 bottom-2 flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <header className="flex items-center justify-center py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] relative" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+          <div className="absolute left-20 flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <LevelBadge
               compact
               onOpenLeaderboard={() => { setAchievementsTab('stats'); setAchievementsOpen(true); }}

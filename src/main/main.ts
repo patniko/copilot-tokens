@@ -28,6 +28,10 @@ function createWindow(): void {
     },
   });
 
+  // Notify renderer of fullscreen changes (traffic lights hide in fullscreen)
+  mainWindow.on('enter-full-screen', () => mainWindow?.webContents.send('window:fullscreen', true));
+  mainWindow.on('leave-full-screen', () => mainWindow?.webContents.send('window:fullscreen', false));
+
   registerIpcHandlers(mainWindow);
 
   // Allow microphone access for voice input (Web Speech API)

@@ -332,3 +332,12 @@ contextBridge.exposeInMainWorld('packAPI', {
     return ipcRenderer.invoke('packs:theme:delete', id);
   },
 });
+
+
+contextBridge.exposeInMainWorld('windowAPI', {
+  onFullscreenChange(callback: (isFullscreen: boolean) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, isFullscreen: boolean) => callback(isFullscreen);
+    ipcRenderer.on('window:fullscreen', listener);
+    return () => ipcRenderer.removeListener('window:fullscreen', listener);
+  },
+});
