@@ -94,8 +94,8 @@ export function buildDemoScript(): DemoStep[] {
     subagentStart(t1, 'explore', 'Explore Agent', 'Fast codebase exploration and analysis'),
     subagentDone(t1, 'explore'),
     assistantText('Now I have the full picture. Let me add a `run` command that just runs an adapter and pops the dashboard — no specs required.'),
-    usage(3200, 890),
-    contextUsage(4100, 200000),
+    usage(3500, 1200),
+    contextUsage(4700, 200000),
     turnEnd('0'),
 
     // Tool calls — reading existing code
@@ -104,8 +104,8 @@ export function buildDemoScript(): DemoStep[] {
     toolStart('view', { path: 'src/cli/index.ts' }, t2),
     toolStart('view', { path: 'package.json' }, t3),
     toolComplete(t2, true, '// CLI entry point with compare and verify commands...'),
-    toolComplete(t3, true, '{ "name": "assay", "scripts": { ... } }'),
-    usage(5800, 1200),
+    toolComplete(t3, true, '{ "name": "signal", "scripts": { ... } }'),
+    usage(7000, 2000),
     turnEnd('1'),
 
     // Creating the run command
@@ -116,15 +116,15 @@ export function buildDemoScript(): DemoStep[] {
     toolComplete(t5, true, 'Applied edit to src/cli/index.ts'),
     toolStart('edit', { path: 'package.json', description: 'Add npm scripts' }, t6),
     toolComplete(t6, true, 'Applied edit to package.json'),
-    usage(8500, 2800),
-    contextUsage(11300, 200000),
+    usage(11000, 3500),
+    contextUsage(17700, 200000),
     turnEnd('2'),
 
     // Verify it works
     turnStart('3'),
     assistantText('Now let me verify it compiles and the self adapter actually works:'),
     toolStart('bash', { command: 'npm run build && npm run run -- --help' }, t7),
-    toolComplete(t7, true, '✓ Built successfully\n\nUsage: assay run [options]\n\nRun a single adapter and optionally open the dashboard\n\nOptions:\n  -a, --adapter <name>  Adapter to use (default: "self")\n  -w, --web             Open web dashboard\n  --command <cmd>       Command for process adapter\n  -h, --help            display help'),
+    toolComplete(t7, true, '✓ Built successfully\n\nUsage: signal run [options]\n\nRun a single adapter and optionally open the dashboard\n\nOptions:\n  -a, --adapter <name>  Adapter to use (default: "self")\n  -w, --web             Open web dashboard\n  --command <cmd>       Command for process adapter\n  -h, --help            display help'),
     toolStart('bash', { command: 'npm run run -- -w' }, t8),
     toolComplete(t8, true, 'Running adapter: self...\n✓ Captured 14 signals in 2.3s\n✓ Dashboard opened at http://localhost:3847'),
     assistantText(`All working. Here's what was added:
@@ -133,20 +133,20 @@ export function buildDemoScript(): DemoStep[] {
 
 \`\`\`bash
 # Self adapter — terminal dashboard (default)
-assay run
+signal run
 
 # Self adapter — pop the web dashboard
-assay run -w
+signal run -w
 
 # Process adapter — probe any CLI tool
-assay run -a process --command "my-tool arg1 arg2" -w
+signal run -a process --command "my-tool arg1 arg2" -w
 \`\`\`
 
 **npm scripts** added to \`package.json\`:
 - \`npm run run\` — quick-run the default (self) adapter
 - \`npm run dashboard\` — open the web dashboard`),
-    usage(12000, 4100),
-    contextUsage(16100, 200000),
+    usage(16000, 5000),
+    contextUsage(27700, 200000),
     idle(),
     turnEnd('3'),
 
@@ -161,8 +161,8 @@ assay run -a process --command "my-tool arg1 arg2" -w
     assistantText(`The traces are identical because the adapter sends the **same prompt** to all three presets. The preset changes which tools the runtime exposes, but if the prompt triggers the same behavior, you get identical waveforms.
 
 Let me check and fix this — the default prompt should be preset-aware:`),
-    usage(18000, 5200),
-    contextUsage(23200, 200000),
+    usage(22000, 8000),
+    contextUsage(41700, 200000),
     turnEnd('4'),
 
     // Fix the prompts
@@ -180,8 +180,8 @@ Let me fix the tools parsing and auth detection:`),
     toolComplete(t12, true, 'Applied edit to src/adapters/copilot-core/adapter.ts'),
     toolStart('edit', { path: 'src/adapters/copilot-core/adapter.ts', description: 'Fix auth status detection' }, t13),
     toolComplete(t13, true, 'Applied edit to src/adapters/copilot-core/adapter.ts'),
-    usage(26000, 7800),
-    contextUsage(33800, 200000),
+    usage(30000, 12000),
+    contextUsage(61700, 200000),
     idle(),
     turnEnd('5'),
 
@@ -192,8 +192,8 @@ Let me fix the tools parsing and auth detection:`),
     toolStart('edit', { path: 'src/adapters/copilot-core/adapter.ts', description: 'Auto-inject gh auth token' }, t14),
     toolComplete(t14, true, 'Applied edit to src/adapters/copilot-core/adapter.ts'),
     assistantText('Done. The adapter now runs `gh auth token` before spawning the runtime and passes it as `GITHUB_TOKEN` in the environment. It\'s silent if `gh` isn\'t installed or not logged in — just falls back to whatever\'s already in the env.'),
-    usage(32000, 9100),
-    contextUsage(41100, 200000),
+    usage(40000, 18000),
+    contextUsage(89700, 200000),
     idle(),
     turnEnd('6'),
 
@@ -201,7 +201,7 @@ Let me fix the tools parsing and auth detection:`),
     userMsg('review the latest run and help me finalize this. the data still looks wrong — i would expect some difference between presets', 3500),
     turnStart('7'),
     intent('Reviewing trace data'),
-    toolStart('bash', { command: 'assay run -a copilot-core --binary ./runtime --save-trace traces/debug.jsonl' }, t15),
+    toolStart('bash', { command: 'signal run -a copilot-core --binary ./runtime --save-trace traces/debug.jsonl' }, t15),
     toolComplete(t15, true, 'Running adapter: copilot-core...\n✓ Auth: gh token injected\n✓ Tools detected: 7 (cli), 6 (filesystem), 0 (minimal)\n⚠ All sessions timed out at 120s', 1200),
     toolStart('view', { path: 'traces/debug.jsonl' }, t16),
     toolComplete(t16, true, '{"probe":"tools","signal":"jsonrpc.out/response","data":{"tools":{"tools":[{"name":"task_complete"},{"name":"bash"},...]}}}'),
@@ -211,8 +211,8 @@ Let me fix the tools parsing and auth detection:`),
 2. **Tools parsing**: response is \`{"tools":{"tools":[...]}}\` (nested) but the adapter checks \`Array.isArray(tools)\` on the outer object, so it always sees 0
 
 Let me fix both:`),
-    usage(42000, 12500),
-    contextUsage(54500, 200000),
+    usage(55000, 25000),
+    contextUsage(129700, 200000),
     turnEnd('7'),
 
     // Apply fixes
@@ -228,8 +228,8 @@ Let me fix both:`),
 **Tools showing 0**: The runtime returns \`{"tools":{"tools":[...]}}\` (nested object). The adapter was checking \`Array.isArray(tools)\` on the outer object → always false → 0 tools. Now it unwraps the nesting correctly.
 
 **Identical presets**: All three presets hit the same auth wall — \`status: "unauthorized"\` → LLM call fails. The adapter was masking this by labeling it \`authenticated\`. Now it correctly emits \`state: unauthorized\`.`),
-    usage(52000, 16000),
-    contextUsage(68000, 200000),
+    usage(75000, 40000),
+    contextUsage(189700, 200000),
     idle(),
     turnEnd('8'),
 
@@ -237,7 +237,7 @@ Let me fix both:`),
     userMsg('still the same — all waveforms are identical', 3000),
     turnStart('9'),
     intent('Debugging waveform differences'),
-    toolStart('bash', { command: 'assay compare -a copilot-core --binary ./runtime --timeout 300 --save-trace traces/compare.jsonl' }, t20),
+    toolStart('bash', { command: 'signal compare -a copilot-core --binary ./runtime --timeout 300 --save-trace traces/compare.jsonl' }, t20),
     toolComplete(t20, true, 'Running 3 presets in parallel...\n✓ cli: 7 tools, 27 signals, timeout at 300s\n✓ filesystem: 6 tools, 27 signals, timeout at 300s\n✓ minimal: 0 tools, 27 signals, timeout at 300s\n\nDiff: No behavioral differences detected', 1500),
     assistantText(`The tools column IS different now (7/6/0) — but the diff says "No behavioral differences" because it only compares signal *type* keys, not the data inside them. All three presets emit the same signal *types* in the same quantities — the differences are buried in payloads.
 
@@ -246,8 +246,8 @@ Two things to fix: make the diff data-aware for key signals, and check why all t
     toolComplete(t21, true, '// Diff engine — compares signal type counts across traces...'),
     toolStart('edit', { path: 'src/analysis/diff.ts', description: 'Decompose state and tool signals for richer diff' }, t22),
     toolComplete(t22, true, 'Applied edit to src/analysis/diff.ts'),
-    usage(62000, 21000),
-    contextUsage(83000, 200000),
+    usage(100000, 55000),
+    contextUsage(269700, 200000),
     turnEnd('9'),
 
     // Fix timeout issue
@@ -257,7 +257,7 @@ Two things to fix: make the diff data-aware for key signals, and check why all t
     toolComplete(t23, true, 'Applied edit to src/adapters/copilot-core/adapter.ts'),
     toolStart('edit', { path: 'src/cli/index.ts', description: 'Add --timeout CLI flag' }, t24),
     toolComplete(t24, true, 'Applied edit to src/cli/index.ts'),
-    toolStart('bash', { command: 'npm run build && assay compare --timeout 300 -a copilot-core --binary ./runtime' }, t25),
+    toolStart('bash', { command: 'npm run build && signal compare --timeout 300 -a copilot-core --binary ./runtime' }, t25),
     toolComplete(t25, true, 'Running 3 presets in parallel...\n✓ cli: 7 tools, completed in 180s\n✓ filesystem: 6 tools, completed in 165s\n✓ minimal: 0 tools, completed in 95s\n\nDiff:\n  + state/authenticated → state/unauthorized (minimal)\n  + tool.out/task_complete (cli, filesystem only)\n  + tool.out/bash (cli only)\n  3 behavioral differences found', 1800),
     assistantText(`Now the diff surfaces real behavioral differences! The state transitions are decomposed and tool signals show tool names.
 
@@ -270,8 +270,8 @@ Here's the summary of all fixes:
 | **Auth fails at LLM call** | No token in env | Auto-inject \`gh auth token\` |
 | **Identical waveforms** | Diff only compared type counts | Decompose state/tool signal data |
 | **All sessions timeout** | 120s too short for 2+ LLM calls | Default 300s + \`--timeout\` flag |`),
-    usage(78000, 28000),
-    contextUsage(106000, 200000),
+    usage(130000, 80000),
+    contextUsage(379700, 200000),
     idle(),
     turnEnd('10'),
 
@@ -291,8 +291,8 @@ The spec viewer includes:
 - Syntax-highlighted YAML rendering
 - Collapsible sections for large specs
 - Links between spec entries and their corresponding waveform signals`),
-    usage(95000, 35000),
-    contextUsage(130000, 200000),
+    usage(160000, 120000),
+    contextUsage(529700, 200000),
     idle(2000),
     turnEnd('11'),
   ];

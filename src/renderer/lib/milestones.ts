@@ -35,6 +35,16 @@ export const MILESTONES: Milestone[] = [
   { id: 'edit-100',    threshold: 100,       metric: 'linesInEdit',  label: 'Big Bang Edit!',     emoji: '💥', effect: 'banner',   sound: 'milestone' },
 ];
 
+/** Demo mode milestones — tighter thresholds, escalating effects */
+export const DEMO_MILESTONES: Milestone[] = [
+  { id: 'demo-10k',  threshold: 10_000,  metric: 'totalTokens', label: '10K TOKENS!',          emoji: '✨', effect: 'sparkle',  sound: 'milestone' },
+  { id: 'demo-25k',  threshold: 25_000,  metric: 'totalTokens', label: '25K TOKENS!',          emoji: '🔥', effect: 'banner',   sound: 'milestone' },
+  { id: 'demo-50k',  threshold: 50_000,  metric: 'totalTokens', label: '50K TOKENS!',          emoji: '💯', effect: 'confetti',  sound: 'celebration100k' },
+  { id: 'demo-100k', threshold: 100_000, metric: 'totalTokens', label: '💰 100K TOKENS!',      emoji: '🎰', effect: 'jackpot',   sound: 'celebration100k' },
+  { id: 'demo-250k', threshold: 250_000, metric: 'totalTokens', label: '🎰 JACKPOT! 250K!',    emoji: '🎰', effect: 'jackpot',   sound: 'celebration500k' },
+  { id: 'demo-500k', threshold: 500_000, metric: 'totalTokens', label: '🏆 HALF MILLION CLUB', emoji: '🏆', effect: 'mega',      sound: 'celebration500k' },
+];
+
 export const BADGES: Badge[] = [
   // Feature discovery
   { id: 'badge-first-image',     label: 'Visionary',         emoji: '🖼️',  effect: 'sparkle',  sound: 'milestone', description: 'Attached an image for the first time' },
@@ -57,6 +67,7 @@ export const BADGES: Badge[] = [
 let demoScale = 1;
 export function setDemoScale(scale: number): void { demoScale = Math.max(1, scale); }
 export function getDemoScale(): number { return demoScale; }
+export function isDemoMode(): boolean { return demoScale > 1; }
 
 // User milestone packs loaded from pack store
 let userPacks: MilestonePack[] = [];
@@ -68,7 +79,8 @@ export function setUserMilestonePacks(packs: MilestonePack[]): void {
 /** Returns built-in milestones + badges merged with active user packs */
 export function getAllMilestones(): (Milestone | Badge)[] {
   const extras = userPacks.filter((p) => p.active).flatMap((p) => p.milestones);
-  return [...MILESTONES, ...BADGES, ...extras];
+  const baseMilestones = isDemoMode() ? DEMO_MILESTONES : MILESTONES;
+  return [...baseMilestones, ...BADGES, ...extras];
 }
 
 function getMetricValue(stats: DashboardStats, metric: Milestone['metric']): number {
@@ -89,8 +101,7 @@ export function checkMilestones(
     if (!('threshold' in m)) continue; // Skip badges
     const prev = getMetricValue(previousStats, m.metric);
     const curr = getMetricValue(stats, m.metric);
-    const scaledThreshold = m.threshold / demoScale;
-    if (prev < scaledThreshold && curr >= scaledThreshold) {
+    if (prev < m.threshold && curr >= m.threshold) {
       triggered.push(m);
     }
   }

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import type { Milestone, Badge } from '../lib/milestones';
 import { useSound } from '../hooks/useSound';
+import copilotImg from '../../../image.png';
 
 type AnyMilestone = Milestone | Badge;
 
@@ -19,19 +20,60 @@ const DURATIONS: Record<Milestone['effect'], number> = {
   mega: 5000,
 };
 
+/** How many spinning copilot images per effect tier */
+function getSpinCount(milestone: AnyMilestone): number {
+  if (!('threshold' in milestone)) return 0;
+  const t = milestone.threshold;
+  if (t >= 500_000) return 20;
+  if (t >= 250_000) return 14;
+  if (t >= 100_000) return 8;
+  return 0;
+}
+
+interface SpinImage {
+  id: number;
+  x: number;      // start x (0-1)
+  y: number;      // start y (0-1)
+  size: number;    // px
+  delay: number;   // stagger delay in s
+  dir: number;     // rotation direction (1 or -1)
+  drift: number;   // horizontal drift
+}
+
+function generateSpinImages(count: number): SpinImage[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: i,
+    x: Math.random(),
+    y: Math.random() * 0.6 + 0.1,
+    size: 40 + Math.random() * 50,
+    delay: (i * 0.15) + Math.random() * 0.3,
+    dir: Math.random() > 0.5 ? 1 : -1,
+    drift: (Math.random() - 0.5) * 200,
+  }));
+}
+
 export default function MilestoneOverlay({ milestone, onComplete }: MilestoneOverlayProps) {
   const { play } = useSound();
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [spinImages, setSpinImages] = useState<SpinImage[]>([]);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
   useEffect(() => {
-    if (!milestone) return;
+    if (!milestone) {
+      setSpinImages([]);
+      return;
+    }
 
     play(milestone.sound);
     fireEffect(milestone.effect);
+
+    const count = getSpinCount(milestone);
+    if (count > 0) {
+      setSpinImages(generateSpinImages(count));
+    }
 
     cleanup();
     timerRef.current = setTimeout(onComplete, DURATIONS[milestone.effect]);
@@ -75,6 +117,34 @@ export default function MilestoneOverlay({ milestone, onComplete }: MilestoneOve
               transition={{ duration: 2, ease: 'easeOut' }}
             />
           )}
+
+          {/* Spinning copilot images for jackpot/mega */}
+          {spinImages.map((img) => (
+            <motion.img
+              key={img.id}
+              src={copilotImg}
+              className="absolute"
+              style={{
+                left: `${img.x * 100}%`,
+                top: `${img.y * 100}%`,
+                width: img.size,
+                height: img.size,
+              }}
+              initial={{ opacity: 0, scale: 0, rotate: 0, x: 0, y: 0 }}
+              animate={{
+                opacity: [0, 1, 1, 1, 0],
+                scale: [0, 1.2, 1, 1, 0.3],
+                rotate: img.dir * 720,
+                x: img.drift,
+                y: -150 - Math.random() * 200,
+              }}
+              transition={{
+                duration: 3,
+                delay: img.delay,
+                ease: 'easeOut',
+              }}
+            />
+          ))}
 
           {/* Screen shake wrapper for mega */}
           <motion.div
@@ -137,7 +207,7 @@ export default function MilestoneOverlay({ milestone, onComplete }: MilestoneOve
               animate={{ x: 0, opacity: 1 }}
               transition={{ delay: 1, type: 'spring', damping: 15 }}
             >
-              🏆 Badge Unlocked: Million Token Club
+              🏆 Badge Unlocked: {milestone.label}
             </motion.div>
           )}
         </div>
