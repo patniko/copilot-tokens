@@ -19,12 +19,12 @@ function userMsg(content: string, delay = 2500): DemoStep {
   return { delay, events: [{ type: 'user.message', content }] };
 }
 
-function turnStart(id: string, delay = 200): DemoStep {
-  return { delay, events: [{ type: 'assistant.turn_start', turnId: id }] };
+function turnStart(_id: string, delay = 200): DemoStep {
+  return { delay, events: [] };
 }
 
-function turnEnd(id: string, delay = 100): DemoStep {
-  return { delay, events: [{ type: 'assistant.turn_end', turnId: id }] };
+function turnEnd(_id: string, delay = 100): DemoStep {
+  return { delay, events: [] };
 }
 
 function assistantText(content: string, delay = 100): DemoStep {
