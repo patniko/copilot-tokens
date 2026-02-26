@@ -15,6 +15,7 @@ interface CopilotAPI {
   clearPermissionRules(): Promise<void>;
   setYoloMode(enabled: boolean): Promise<void>;
   getYoloMode(): Promise<boolean>;
+  emitDemoEvent(event: unknown, panelId?: string): void;
   onAskUserRequest(callback: (request: { question: string; choices?: string[]; allowFreeform?: boolean }) => void): () => void;
   respondAskUser(answer: string, wasFreeform: boolean): void;
 }

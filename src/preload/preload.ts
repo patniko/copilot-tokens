@@ -44,6 +44,11 @@ contextBridge.exposeInMainWorld('copilotAPI', {
   clearPermissionRules(): Promise<void> {
     return ipcRenderer.invoke('copilot:clearPermissionRules');
   },
+  emitDemoEvent(event: unknown, panelId?: string): void {
+    const channel = `copilot:event:${panelId || 'main'}`;
+    // Emit locally — triggers onEvent listeners without round-tripping to main process
+    ipcRenderer.emit(channel, {} as unknown, event);
+  },
   setYoloMode(enabled: boolean): Promise<void> {
     return ipcRenderer.invoke('copilot:setYoloMode', enabled);
   },

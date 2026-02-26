@@ -198,6 +198,20 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
       const event = raw as CopilotEvent;
 
       switch (event.type) {
+        // Demo replay: inject user messages via event channel
+        case 'user.message' as string: {
+          const content = String((event as Record<string, unknown>).content ?? '');
+          if (content) {
+            const msg: UserMessage = { id: generateId(), type: 'user', content, timestamp: Date.now() };
+            setMessages((prev) => [...prev, msg]);
+            setIsWaiting(true);
+            setIsGenerating(true);
+            setElapsedSec(0);
+            currentAssistantIdRef.current = null;
+          }
+          break;
+        }
+
         case 'assistant.message_delta': {
           setIsWaiting(false);
           // Feed the streaming snippet for the activity bar

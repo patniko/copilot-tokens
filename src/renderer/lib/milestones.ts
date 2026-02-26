@@ -53,6 +53,11 @@ export const BADGES: Badge[] = [
   { id: 'badge-3-panels',        label: 'Multitasker',       emoji: '🧠',  effect: 'confetti', sound: 'milestone', description: 'Opened 3+ panels at once' },
 ];
 
+// Demo mode milestone scaling — divides thresholds by this factor
+let demoScale = 1;
+export function setDemoScale(scale: number): void { demoScale = Math.max(1, scale); }
+export function getDemoScale(): number { return demoScale; }
+
 // User milestone packs loaded from pack store
 let userPacks: MilestonePack[] = [];
 
@@ -84,7 +89,8 @@ export function checkMilestones(
     if (!('threshold' in m)) continue; // Skip badges
     const prev = getMetricValue(previousStats, m.metric);
     const curr = getMetricValue(stats, m.metric);
-    if (prev < m.threshold && curr >= m.threshold) {
+    const scaledThreshold = m.threshold / demoScale;
+    if (prev < scaledThreshold && curr >= scaledThreshold) {
       triggered.push(m);
     }
   }

@@ -22,6 +22,8 @@ import { useBadges } from './hooks/useBadges';
 import { addSessionToProgress, type LevelProgress } from './lib/level-system';
 import { partyBus, PartyEvents } from './lib/party-bus';
 import SoundManager from './lib/sound-manager';
+import { setDemoScale } from './lib/milestones';
+import { DemoReplayService } from './lib/demo-replay';
 import type { PermissionRequestData, PermissionDecision } from './components/PermissionDialog';
 import { useMilestones } from './hooks/useMilestones';
 
@@ -57,6 +59,10 @@ export default function App() {
 
   // Reset key — incrementing remounts TokenDashboard
   const [resetKey, setResetKey] = useState(0);
+
+  // Demo mode
+  const [demoActive, setDemoActive] = useState(false);
+  const demoReplayRef = useRef<DemoReplayService | null>(null);
 
   // --- Tab state ---
   const tabCounter = useRef(0);
@@ -98,6 +104,34 @@ export default function App() {
       panelCounter: 0,
     }));
   }, [sessionRecorder, activeTabId, updateTab]);
+
+  // Demo mode handlers
+  const handleDemoStart = useCallback(() => {
+    handleReset();
+    setDemoScale(10);
+    setDemoActive(true);
+    setAgentActive(true);
+    const replay = new DemoReplayService();
+    demoReplayRef.current = replay;
+    replay.onComplete = () => {
+      setDemoActive(false);
+      setAgentActive(false);
+      setDemoScale(1);
+      demoReplayRef.current = null;
+    };
+    // Wait for React to flush the reset before starting replay
+    setTimeout(() => {
+      replay.start(`${activeTabId}:main`);
+    }, 150);
+  }, [handleReset, activeTabId]);
+
+  const handleDemoStop = useCallback(() => {
+    demoReplayRef.current?.stop();
+    demoReplayRef.current = null;
+    setDemoActive(false);
+    setAgentActive(false);
+    setDemoScale(1);
+  }, []);
 
   // Permission request state + reaction time tracking
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestData | null>(null);
@@ -573,6 +607,20 @@ export default function App() {
           </div>
           <div className="absolute right-4 flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} onCommitSuccess={() => triggerBadge('badge-first-commit')} onFilesChanged={refreshChangedFiles} />
+            <button
+              onClick={demoActive ? handleDemoStop : handleDemoStart}
+              className={`px-4 py-2 rounded-lg font-bold text-sm cursor-pointer transition-all ${
+                demoActive
+                  ? 'bg-red-500/80 text-white hover:bg-red-500'
+                  : 'text-white hover:opacity-90'
+              }`}
+              style={demoActive ? undefined : {
+                background: 'linear-gradient(135deg, var(--accent-purple), #ec4899)',
+                boxShadow: '0 0 15px rgba(168,85,247,0.4), 0 0 30px rgba(236,72,153,0.2)',
+              }}
+            >
+              {demoActive ? '⏹ STOP' : '🎲 DEMO'}
+            </button>
           </div>
         </header>
 
