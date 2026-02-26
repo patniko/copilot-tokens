@@ -294,6 +294,38 @@ contextBridge.exposeInMainWorld('cwdAPI', {
   },
 });
 
+contextBridge.exposeInMainWorld('schedulerAPI', {
+  list(): Promise<unknown[]> {
+    return ipcRenderer.invoke('scheduler:list');
+  },
+  add(task: unknown): Promise<unknown> {
+    return ipcRenderer.invoke('scheduler:add', task);
+  },
+  update(id: string, updates: unknown): Promise<unknown> {
+    return ipcRenderer.invoke('scheduler:update', id, updates);
+  },
+  delete(id: string): Promise<boolean> {
+    return ipcRenderer.invoke('scheduler:delete', id);
+  },
+  setEnabled(id: string, enabled: boolean): Promise<unknown> {
+    return ipcRenderer.invoke('scheduler:setEnabled', id, enabled);
+  },
+  getRunHistory(taskId?: string): Promise<{ taskId: string; timestamp: number }[]> {
+    return ipcRenderer.invoke('scheduler:getRunHistory', taskId);
+  },
+  getNextFireTime(taskId: string): Promise<number | null> {
+    return ipcRenderer.invoke('scheduler:getNextFireTime', taskId);
+  },
+  runNow(taskId: string): Promise<boolean> {
+    return ipcRenderer.invoke('scheduler:runNow', taskId);
+  },
+  onTaskFired(callback: (task: unknown) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, task: unknown) => callback(task);
+    ipcRenderer.on('scheduler:taskFired', listener);
+    return () => ipcRenderer.removeListener('scheduler:taskFired', listener);
+  },
+});
+
 contextBridge.exposeInMainWorld('packAPI', {
   // Milestone packs
   listMilestonePacks(): Promise<unknown[]> {

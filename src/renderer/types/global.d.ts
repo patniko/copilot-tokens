@@ -140,6 +140,37 @@ interface WindowAPI {
   onFullscreenChange(callback: (isFullscreen: boolean) => void): () => void;
 }
 
+interface ScheduledTaskData {
+  id: string;
+  name: string;
+  prompt: string;
+  model: string;
+  cwd: string;
+  yoloMode: boolean;
+  schedule: {
+    type: 'interval' | 'daily' | 'weekly' | 'monthly';
+    intervalMinutes?: number;
+    timeOfDay?: string;
+    dayOfWeek?: number;
+    dayOfMonth?: number;
+  };
+  enabled: boolean;
+  lastRunAt?: number;
+  createdAt: number;
+}
+
+interface SchedulerAPI {
+  list(): Promise<ScheduledTaskData[]>;
+  add(task: Omit<ScheduledTaskData, 'id' | 'createdAt'>): Promise<ScheduledTaskData>;
+  update(id: string, updates: Partial<Omit<ScheduledTaskData, 'id' | 'createdAt'>>): Promise<ScheduledTaskData | null>;
+  delete(id: string): Promise<boolean>;
+  setEnabled(id: string, enabled: boolean): Promise<ScheduledTaskData | null>;
+  getRunHistory(taskId?: string): Promise<{ taskId: string; timestamp: number }[]>;
+  getNextFireTime(taskId: string): Promise<number | null>;
+  runNow(taskId: string): Promise<boolean>;
+  onTaskFired(callback: (task: ScheduledTaskData) => void): () => void;
+}
+
 declare global {
   interface Window {
     copilotAPI: CopilotAPI;
@@ -156,6 +187,7 @@ declare global {
     sessionsAPI: SessionsAPI;
     agentsAPI: AgentsAPI;
     windowAPI: WindowAPI;
+    schedulerAPI: SchedulerAPI;
   }
 }
 

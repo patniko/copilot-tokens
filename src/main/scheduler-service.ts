@@ -229,6 +229,24 @@ export class SchedulerService {
     }, delayMs));
   }
 
+  /** Manually trigger a task immediately, regardless of schedule or enabled state. */
+  runNow(taskId: string): boolean {
+    const tasks = store.get('tasks');
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return false;
+
+    this.recordRun(taskId);
+
+    // Notify renderer
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send('scheduler:taskFired', task);
+    }
+
+    // Reschedule if enabled (the manual run resets the interval baseline)
+    if (task.enabled) this.scheduleNext(task);
+    return true;
+  }
+
   private fireTask(taskId: string): void {
     const tasks = store.get('tasks');
     const task = tasks.find(t => t.id === taskId);

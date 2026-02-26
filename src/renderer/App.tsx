@@ -17,6 +17,7 @@ import CwdDropdown from './components/CwdDropdown';
 import LevelUpOverlay from './components/LevelUpOverlay';
 import TabBar from './components/TabBar';
 import type { ProjectTab, TabActivity } from './components/TabBar';
+import SchedulerPanel from './components/SchedulerPanel';
 import { useSessionRecorder } from './hooks/useSessionRecorder';
 import { useBadges } from './hooks/useBadges';
 import { addSessionToProgress, type LevelProgress } from './lib/level-system';
@@ -63,6 +64,12 @@ export default function App() {
   // Demo mode
   const [demoActive, setDemoActive] = useState(false);
   const demoReplayRef = useRef<DemoReplayService | null>(null);
+
+  // Scheduler
+  const [schedulerOpen, setSchedulerOpen] = useState(false);
+  const preTaskModelRef = useRef<string | null>(null);
+  const currentModelRef = useRef(currentModel);
+  currentModelRef.current = currentModel;
 
   // Fullscreen state (traffic lights hidden in fullscreen)
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -588,6 +595,92 @@ export default function App() {
     }
   }, [tabs]);
 
+  // ── Scheduler: taskFired listener ──
+  const SCHEDULER_TAB_ID = 'tab-scheduler';
+
+  useEffect(() => {
+    if (!window.schedulerAPI?.onTaskFired) return;
+    return window.schedulerAPI.onTaskFired((task) => {
+      const panelId = `${SCHEDULER_TAB_ID}:main`;
+
+      // Save the current model so we can restore it after the task completes
+      preTaskModelRef.current = currentModelRef.current;
+
+      setTabs(prev => {
+        const existing = prev.find(t => t.id === SCHEDULER_TAB_ID);
+        if (existing) {
+          // Reset session on the existing scheduler tab
+          window.copilotAPI?.destroySession(panelId);
+          return prev.map(t => t.id === SCHEDULER_TAB_ID ? {
+            ...t,
+            cwd: task.cwd,
+            yoloMode: task.yoloMode,
+            panels: [{ id: panelId, userPrompt: null, resetKey: Date.now() }],
+            panelCounter: 0,
+          } : t);
+        }
+        // Create new scheduler tab
+        const newTab: ProjectTab = {
+          id: SCHEDULER_TAB_ID,
+          cwd: task.cwd,
+          gitBranch: null,
+          changedFiles: [],
+          panels: [{ id: panelId, userPrompt: null, resetKey: Date.now() }],
+          panelCounter: 0,
+          yoloMode: task.yoloMode,
+        };
+        return [...prev, newTab];
+      });
+
+      // Switch to the scheduler tab + set per-task config
+      setActiveTabId(SCHEDULER_TAB_ID);
+      window.copilotAPI?.setYoloMode(task.yoloMode);
+      window.cwdAPI?.set(task.cwd, [panelId]);
+      window.modelAPI?.set(task.model);
+      setCurrentModel(task.model);
+
+      // Wait for React to flush, then update git info and send the prompt
+      setTimeout(() => {
+        window.cwdAPI?.gitInfo(task.cwd).then((info) => {
+          updateTab(SCHEDULER_TAB_ID, (tab) => ({
+            ...tab,
+            gitBranch: info.isRepo ? (info.branch ?? null) : null,
+          }));
+        });
+
+        // Trigger the prompt by setting userPrompt on the panel
+        if (!sessionStartRef.current) sessionStartRef.current = Date.now();
+        setAgentActive(true);
+        updateTab(SCHEDULER_TAB_ID, (tab) => ({
+          ...tab,
+          panels: tab.panels.map(p => p.id === panelId ? { ...p, userPrompt: task.prompt } : p),
+        }));
+        requestAnimationFrame(() => {
+          updateTab(SCHEDULER_TAB_ID, (tab) => ({
+            ...tab,
+            panels: tab.panels.map(p => p.id === panelId ? { ...p, userPrompt: null } : p),
+          }));
+        });
+      }, 200);
+    });
+  }, [updateTab]);
+
+  // Restore model after a scheduler task completes
+  useEffect(() => {
+    if (!window.copilotAPI?.onEvent) return;
+    const schedulerPanelId = `${SCHEDULER_TAB_ID}:main`;
+    return window.copilotAPI.onEvent((event) => {
+      const ev = event as Record<string, unknown> | null;
+      if (!ev || ev.type !== 'session.idle') return;
+      if (preTaskModelRef.current) {
+        const modelToRestore = preTaskModelRef.current;
+        preTaskModelRef.current = null;
+        window.modelAPI?.set(modelToRestore);
+        setCurrentModel(modelToRestore);
+      }
+    }, schedulerPanelId);
+  }, []);
+
   return (
     <ThemeProvider>
       <div className={`flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono${superMode ? ' super-border' : ''}`}>
@@ -784,6 +877,13 @@ export default function App() {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 0L0 14h9l-2 10L20 10h-9l2-10z"/></svg>
               YOLO
             </button>
+            <button
+              onClick={() => setSchedulerOpen(true)}
+              className="px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-1 font-bold text-[10px] text-[var(--text-secondary)] hover:text-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/10"
+              title="Scheduled tasks"
+            >
+              ⏰ Tasks
+            </button>
           </div>
         </div>
 
@@ -879,6 +979,13 @@ export default function App() {
         <AchievementsModal isOpen={achievementsOpen} onClose={() => setAchievementsOpen(false)} onReplaySession={(ts) => { setAchievementsOpen(false); setReplaySessionTimestamp(ts); }} initialTab={achievementsTab} />
         <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onModelChange={setCurrentModel} />
         <PackStudio isOpen={packStudioOpen} onClose={() => setPackStudioOpen(false)} />
+        <SchedulerPanel
+          isOpen={schedulerOpen}
+          onClose={() => setSchedulerOpen(false)}
+          availableModels={availableModels}
+          currentModel={currentModel}
+          currentCwd={cwd}
+        />
         <SessionReplay sessionTimestamp={replaySessionTimestamp} onClose={() => setReplaySessionTimestamp(null)} />
         <MilestoneOverlay milestone={activeMilestone} onComplete={dismissMilestone} />
         <LevelUpOverlay level={levelUpLevel} onComplete={() => setLevelUpLevel(null)} />

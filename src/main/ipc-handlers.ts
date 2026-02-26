@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { CopilotService, loadMCPServers } from './copilot-service';
 import { StatsService, SessionStats } from './stats-service';
 import { PermissionService } from './permission-service';
+import { SchedulerService, type ScheduledTask } from './scheduler-service';
 import * as auth from './auth-service';
 import * as packs from './pack-service';
 
@@ -667,4 +668,43 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle('packs:theme:list', () => packs.getThemePacks());
   ipcMain.handle('packs:theme:save', (_e, pack) => packs.saveThemePack(pack));
   ipcMain.handle('packs:theme:delete', (_e, id: string) => packs.deleteThemePack(id));
+
+  // ── Scheduler ──
+
+  const scheduler = new SchedulerService(mainWindow);
+  scheduler.start();
+
+  ipcMain.handle('scheduler:list', () => scheduler.listTasks());
+
+  ipcMain.handle('scheduler:add', (_e, task: Omit<ScheduledTask, 'id' | 'createdAt'>) => {
+    return scheduler.addTask(task);
+  });
+
+  ipcMain.handle('scheduler:update', (_e, id: string, updates: Partial<Omit<ScheduledTask, 'id' | 'createdAt'>>) => {
+    return scheduler.updateTask(id, updates);
+  });
+
+  ipcMain.handle('scheduler:delete', (_e, id: string) => {
+    return scheduler.deleteTask(id);
+  });
+
+  ipcMain.handle('scheduler:setEnabled', (_e, id: string, enabled: boolean) => {
+    return scheduler.setTaskEnabled(id, enabled);
+  });
+
+  ipcMain.handle('scheduler:getRunHistory', (_e, taskId?: string) => {
+    return scheduler.getRunHistory(taskId);
+  });
+
+  ipcMain.handle('scheduler:getNextFireTime', (_e, taskId: string) => {
+    const tasks = scheduler.listTasks();
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return null;
+    const next = scheduler.getNextFireTime(task);
+    return next ? next.getTime() : null;
+  });
+
+  ipcMain.handle('scheduler:runNow', (_e, taskId: string) => {
+    return scheduler.runNow(taskId);
+  });
 }
