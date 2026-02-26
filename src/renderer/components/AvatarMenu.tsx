@@ -5,9 +5,11 @@ interface AvatarMenuProps {
   onOpenSettings: () => void;
   onOpenAchievements: (tab: 'stats' | 'trophies') => void;
   onOpenPackStudio: () => void;
+  demoActive?: boolean;
+  onDemoToggle?: () => void;
 }
 
-export default function AvatarMenu({ onOpenSettings, onOpenAchievements, onOpenPackStudio }: AvatarMenuProps) {
+export default function AvatarMenu({ onOpenSettings, onOpenAchievements, onOpenPackStudio, demoActive, onDemoToggle }: AvatarMenuProps) {
   const [open, setOpen] = useState(false);
   const [cliUser, setCliUser] = useState<GitHubUser | null>(null);
   const [oauthUser, setOauthUser] = useState<GitHubUser | null>(null);
@@ -188,6 +190,18 @@ export default function AvatarMenu({ onOpenSettings, onOpenAchievements, onOpenP
             >
               <span>⚙️</span> Settings
             </button>
+            {onDemoToggle && (
+              <button
+                onClick={() => { setOpen(false); onDemoToggle(); }}
+                className={`w-full px-4 py-2.5 text-left text-xs transition-colors cursor-pointer flex items-center gap-2 ${
+                  demoActive
+                    ? 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--accent-purple)] hover:bg-[var(--bg-primary)]'
+                }`}
+              >
+                <span>{demoActive ? '⏹' : '🎲'}</span> {demoActive ? 'Stop Demo' : 'Demo Mode'}
+              </button>
+            )}
           </div>
         </>
       )}

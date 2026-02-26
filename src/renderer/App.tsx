@@ -42,7 +42,7 @@ export default function App() {
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const { activeMilestone, checkStats, dismissMilestone } = useMilestones();
+  const { activeMilestone, checkStats, dismissMilestone, resetFired } = useMilestones();
   const sessionRecorder = useSessionRecorder();
   const { trigger: triggerBadge } = useBadges();
 
@@ -121,6 +121,7 @@ export default function App() {
   // Demo mode handlers
   const handleDemoStart = useCallback(() => {
     handleReset();
+    resetFired();
     setDemoScale(10);
     setDemoActive(true);
     setAgentActive(true);
@@ -136,7 +137,7 @@ export default function App() {
     setTimeout(() => {
       replay.start(`${activeTabId}:main`);
     }, 150);
-  }, [handleReset, activeTabId]);
+  }, [handleReset, resetFired, activeTabId]);
 
   const handleDemoStop = useCallback(() => {
     demoReplayRef.current?.stop();
@@ -706,20 +707,6 @@ export default function App() {
           </div>
           <div className="absolute right-4 flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <CommitButton changedFiles={changedFiles} visible={changedFiles.length > 0} onSendFeedback={handleSend} onCommitSuccess={() => triggerBadge('badge-first-commit')} onFilesChanged={refreshChangedFiles} />
-            <button
-              onClick={demoActive ? handleDemoStop : handleDemoStart}
-              className={`px-4 py-2 rounded-lg font-bold text-sm cursor-pointer transition-all ${
-                demoActive
-                  ? 'bg-red-500/80 text-white hover:bg-red-500'
-                  : 'text-white hover:opacity-90'
-              }`}
-              style={demoActive ? undefined : {
-                background: 'linear-gradient(135deg, var(--accent-purple), #ec4899)',
-                boxShadow: '0 0 15px rgba(168,85,247,0.4), 0 0 30px rgba(236,72,153,0.2)',
-              }}
-            >
-              {demoActive ? '⏹ STOP' : '🎲 DEMO'}
-            </button>
           </div>
         </header>
 
@@ -919,6 +906,8 @@ export default function App() {
                 onOpenSettings={() => { setSettingsOpen(true); setPackStudioOpen(false); }}
                 onOpenAchievements={(tab) => { setAchievementsTab(tab); setAchievementsOpen(true); }}
                 onOpenPackStudio={() => { setPackStudioOpen(true); setSettingsOpen(false); }}
+                demoActive={demoActive}
+                onDemoToggle={demoActive ? handleDemoStop : handleDemoStart}
               />
             </div>
           </aside>

@@ -25,6 +25,14 @@ export function useMilestones() {
     showNext();
   }, [showNext, activeMilestone]);
 
+  /** Clear all fired milestone tracking so they can re-trigger (used by demo mode). */
+  const resetFired = useCallback(() => {
+    firedRef.current.clear();
+    queueRef.current = [];
+    previousStatsRef.current = null;
+    setActiveMilestone(null);
+  }, []);
+
   const checkStats = useCallback(
     (currentStats: DashboardStats) => {
       // First call is the baseline — don't trigger milestones for pre-existing stats
@@ -77,5 +85,5 @@ export function useMilestones() {
     return partyBus.on(PartyEvents.MILESTONE_TRIGGERED, handler);
   }, [activeMilestone]);
 
-  return { activeMilestone, checkStats, dismissMilestone };
+  return { activeMilestone, checkStats, dismissMilestone, resetFired };
 }
