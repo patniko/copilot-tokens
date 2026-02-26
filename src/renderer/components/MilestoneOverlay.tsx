@@ -24,9 +24,11 @@ const DURATIONS: Record<Milestone['effect'], number> = {
 function getSpinCount(milestone: AnyMilestone): number {
   if (!('threshold' in milestone)) return 0;
   const t = milestone.threshold;
-  if (t >= 500_000) return 20;
-  if (t >= 250_000) return 14;
-  if (t >= 100_000) return 8;
+  if (t >= 500_000) return 40;
+  if (t >= 250_000) return 28;
+  if (t >= 100_000) return 18;
+  if (t >= 50_000) return 10;
+  if (t >= 25_000) return 4;
   return 0;
 }
 
