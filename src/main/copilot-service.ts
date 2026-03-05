@@ -471,12 +471,7 @@ export class CopilotService {
       await existing.destroy().catch(() => {});
       this.sessions.delete(panelId);
     }
-    const opts: Record<string, unknown> = {
-      model: this.model,
-      streaming: true,
-    };
-    const cwd = this.panelCwds.get(panelId) || this.workingDirectory;
-    if (cwd) opts.workingDirectory = cwd;
+    const opts = this.buildResumeOpts(panelId);
     const session = await this.client!.resumeSession(sessionId, opts as Parameters<CopilotClientType['resumeSession']>[1]);
     this.sessions.set(panelId, session);
   }
@@ -592,6 +587,8 @@ export class CopilotService {
             kind: decision === 'deny' ? 'denied-interactively-by-user' : 'approved',
           };
         };
+      } else {
+        opts.onPermissionRequest = async () => ({ kind: 'approved' });
       }
       // Ask User handler
       if (features.askUser && this.userInputCallback) {
@@ -652,7 +649,7 @@ export class CopilotService {
       if (features.customTools) {
         opts.tools = buildNativeTools();
       }
-      session = await this.client!.createSession(opts as Parameters<CopilotClientType['createSession']>[0]);
+      session = await this.client!.createSession(opts as unknown as Parameters<CopilotClientType['createSession']>[0]);
       this.sessions.set(panelId, session);
     }
     return session;
@@ -682,6 +679,8 @@ export class CopilotService {
         const decision = await cb(request);
         return { kind: decision === 'deny' ? 'denied-interactively-by-user' : 'approved' };
       };
+    } else {
+      opts.onPermissionRequest = async () => ({ kind: 'approved' });
     }
     if (this.userInputCallback) {
       opts.onUserInputRequest = this.userInputCallback;
