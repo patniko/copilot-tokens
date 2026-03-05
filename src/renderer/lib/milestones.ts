@@ -37,12 +37,13 @@ export const MILESTONES: Milestone[] = [
 
 /** Demo mode milestones — tighter thresholds, escalating effects */
 export const DEMO_MILESTONES: Milestone[] = [
-  { id: 'demo-10k',  threshold: 10_000,  metric: 'totalTokens', label: '10K TOKENS!',          emoji: '✨', effect: 'sparkle',  sound: 'milestone' },
-  { id: 'demo-25k',  threshold: 25_000,  metric: 'totalTokens', label: '25K TOKENS!',          emoji: '🔥', effect: 'banner',   sound: 'milestone' },
-  { id: 'demo-50k',  threshold: 50_000,  metric: 'totalTokens', label: '50K TOKENS!',          emoji: '💯', effect: 'confetti',  sound: 'celebration100k' },
-  { id: 'demo-100k', threshold: 100_000, metric: 'totalTokens', label: '💰 100K TOKENS!',      emoji: '🎰', effect: 'jackpot',   sound: 'celebration100k' },
-  { id: 'demo-250k', threshold: 250_000, metric: 'totalTokens', label: '🎰 JACKPOT! 250K!',    emoji: '🎰', effect: 'jackpot',   sound: 'celebration500k' },
-  { id: 'demo-500k', threshold: 500_000, metric: 'totalTokens', label: '🏆 HALF MILLION CLUB', emoji: '🏆', effect: 'mega',      sound: 'celebration500k' },
+  { id: 'demo-10k',  threshold: 10_000,    metric: 'totalTokens', label: '10K TOKENS!',          emoji: '✨', effect: 'sparkle',  sound: 'milestone' },
+  { id: 'demo-25k',  threshold: 25_000,    metric: 'totalTokens', label: '25K TOKENS!',          emoji: '🔥', effect: 'banner',   sound: 'milestone' },
+  { id: 'demo-50k',  threshold: 50_000,    metric: 'totalTokens', label: '50K TOKENS!',          emoji: '💯', effect: 'confetti',  sound: 'celebration100k' },
+  { id: 'demo-100k', threshold: 100_000,   metric: 'totalTokens', label: '💰 100K TOKENS!',      emoji: '🎰', effect: 'jackpot',   sound: 'celebration100k' },
+  { id: 'demo-250k', threshold: 250_000,   metric: 'totalTokens', label: '🎰 JACKPOT! 250K!',    emoji: '🎰', effect: 'jackpot',   sound: 'celebration500k' },
+  { id: 'demo-500k', threshold: 500_000,   metric: 'totalTokens', label: '🏆 HALF MILLION CLUB', emoji: '🏆', effect: 'mega',      sound: 'celebration500k' },
+  { id: 'demo-1m',   threshold: 1_000_000, metric: 'totalTokens', label: '🔥 KEEP COOKING 🔥',   emoji: '🔥', effect: 'mega',      sound: 'celebration500k' },
 ];
 
 export const BADGES: Badge[] = [

@@ -16,7 +16,9 @@ function toolId(): string {
 }
 
 function userMsg(content: string, delay = 2500): DemoStep {
-  return { delay, events: [{ type: 'user.message', content }] };
+  // Emit typing event first — PromptBar will animate text appearing.
+  // The actual user.message follows in the next step via the demo script.
+  return { delay, events: [{ type: 'demo.typing', content }, { type: 'user.message', content }] };
 }
 
 function turnStart(_id: string, delay = 200): DemoStep {
@@ -85,6 +87,8 @@ export function buildDemoScript(): DemoStep[] {
   const t17 = toolId(), t18 = toolId(), t19 = toolId(), t20 = toolId();
   const t21 = toolId(), t22 = toolId(), t23 = toolId(), t24 = toolId();
   const t25 = toolId(), t26 = toolId(), t27 = toolId(), t28 = toolId();
+  const t29 = toolId(), t30 = toolId(), t31 = toolId(), t32 = toolId();
+  const t33 = toolId(), t34 = toolId(), t35 = toolId();
 
   return [
     // ── Turn 1: User wants a CLI run command ──
@@ -295,5 +299,41 @@ The spec viewer includes:
     contextUsage(529700, 200000),
     idle(2000),
     turnEnd('11'),
+
+    // ── Turn 7: Refactor the whole adapter layer ──
+    userMsg('can you refactor the adapter layer to use a plugin system? each adapter should be auto-discovered', 3000),
+    turnStart('12'),
+    intent('Refactoring adapter system'),
+    toolStart('view', { path: 'src/adapters/index.ts' }, t29),
+    toolComplete(t29, true, '// Adapter registry with manual imports...'),
+    toolStart('edit', { path: 'src/adapters/index.ts', description: 'Rewrite to auto-discover plugins from adapters/ directory' }, t30),
+    toolComplete(t30, true, 'Applied edit to index.ts'),
+    toolStart('edit', { path: 'src/adapters/base.ts', description: 'Add BaseAdapter abstract class with lifecycle hooks' }, t31),
+    toolComplete(t31, true, 'Applied edit to base.ts'),
+    toolStart('bash', { command: 'find src/adapters -name "*.ts" | head -20' }, t32),
+    toolComplete(t32, true, 'src/adapters/midi.ts\nsrc/adapters/audio.ts\nsrc/adapters/serial.ts\nsrc/adapters/websocket.ts\nsrc/adapters/grpc.ts'),
+    toolStart('edit', { path: 'src/adapters/midi.ts', description: 'Migrate to BaseAdapter with plugin metadata' }, t33),
+    toolComplete(t33, true, 'Applied edit to midi.ts'),
+    toolStart('edit', { path: 'src/adapters/audio.ts', description: 'Migrate to BaseAdapter' }, t34),
+    toolComplete(t34, true, 'Applied edit to audio.ts'),
+    assistantText(`Refactored the adapter layer to a plugin system. Each adapter now extends BaseAdapter and exports plugin metadata. The registry auto-discovers adapters at startup by scanning the adapters/ directory. This makes it trivial to add new adapters — just drop a file in the folder.`),
+    usage(280000, 200000),
+    contextUsage(680000, 200000),
+    idle(1500),
+    turnEnd('12'),
+
+    // ── Turn 8: Full test suite + final push past 1M ──
+    userMsg('now write comprehensive tests for all the adapters and the plugin discovery system', 3000),
+    turnStart('13'),
+    intent('Writing adapter tests'),
+    toolStart('create', { path: 'src/adapters/__tests__/plugin-discovery.test.ts' }, t35),
+    toolComplete(t35, true, 'Created plugin-discovery.test.ts'),
+    toolStart('bash', { command: 'npm test -- --reporter=verbose' }, toolId()),
+    toolComplete(toolId(), true, 'Tests: 47 passed, 0 failed\nTime: 3.2s'),
+    assistantText(`All tests passing. I wrote 47 test cases covering plugin discovery, adapter lifecycle, error handling, and all five adapter implementations. The test suite runs in 3.2 seconds with full coverage of the plugin system.`),
+    usage(520000, 480000),
+    contextUsage(980000, 200000),
+    idle(2000),
+    turnEnd('13'),
   ];
 }

@@ -35,6 +35,9 @@ export class DemoReplayService {
     }
   }
 
+  /** Delay per character when typing user messages (ms). */
+  private typingDelay = 30;
+
   private scheduleNext(): void {
     if (!this.running || this.stepIndex >= this.steps.length) {
       this.running = false;
@@ -46,14 +49,21 @@ export class DemoReplayService {
     this.timer = setTimeout(() => {
       if (!this.running) return;
       this.playStep(step);
-      this.stepIndex++;
-      this.scheduleNext();
     }, step.delay);
   }
 
   private playStep(step: DemoStep): void {
     const events = step.events;
-    if (events.length === 0) return;
+    if (events.length === 0) { this.advance(); return; }
+
+    // Check for user typing step (demo.typing + user.message pair)
+    const typingEvent = events.find(e => e.type === 'demo.typing');
+    if (typingEvent) {
+      const content = String(typingEvent.content ?? '');
+      const rest = events.filter(e => e.type !== 'demo.typing');
+      this.playTyping(content, rest);
+      return;
+    }
 
     // Check if this step contains streaming deltas
     const hasDeltas = events.some(e => e.type === 'assistant.message_delta');
@@ -84,6 +94,34 @@ export class DemoReplayService {
         this.emit(event);
       }
     }
+
+    this.advance();
+  }
+
+  /** Animate typing into the prompt bar, then emit remaining events (user.message). */
+  private playTyping(content: string, afterEvents: Record<string, unknown>[]): void {
+    let i = 0;
+    const typeNext = () => {
+      if (!this.running) return;
+      if (i <= content.length) {
+        this.emit({ type: 'demo.typing', content: content.slice(0, i) });
+        i++;
+        setTimeout(typeNext, this.typingDelay);
+      } else {
+        // Typing done — clear the prompt bar and emit the user.message
+        this.emit({ type: 'demo.typing.clear' });
+        for (const ev of afterEvents) {
+          this.emit(ev);
+        }
+        this.advance();
+      }
+    };
+    typeNext();
+  }
+
+  private advance(): void {
+    this.stepIndex++;
+    this.scheduleNext();
   }
 
   private emit(event: Record<string, unknown>): void {

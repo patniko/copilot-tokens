@@ -97,6 +97,20 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
     ta.style.overflowY = ta.scrollHeight > maxHeight ? 'auto' : 'hidden';
   }, [prompt]);
 
+  // Demo mode: animate typing into prompt bar
+  useEffect(() => {
+    if (!window.copilotAPI?.onEvent) return;
+    return window.copilotAPI.onEvent((raw: unknown) => {
+      const ev = raw as Record<string, unknown>;
+      if (!ev || typeof ev !== 'object') return;
+      if (ev.type === 'demo.typing') {
+        setPrompt(String(ev.content ?? ''));
+      } else if (ev.type === 'demo.typing.clear') {
+        setPrompt('');
+      }
+    }, panelId);
+  }, [panelId]);
+
   // Cleanup preview URLs
   useEffect(() => {
     return () => {
