@@ -336,7 +336,9 @@ if (settingsStore.get('reasoningEffort') === 'medium') {
 function buildProviderConfig(conn: ProfileConnection): Record<string, unknown> | null {
   switch (conn.type) {
     case 'anthropic':
-      return { type: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', apiKey: conn.apiKey };
+      // Use OpenAI-compatible endpoint — Anthropic supports /v1/chat/completions
+      // and the CLI doesn't natively implement the Anthropic /v1/messages protocol.
+      return { type: 'openai', baseUrl: 'https://api.anthropic.com/v1/', apiKey: conn.apiKey };
     case 'openai':
       return { type: 'openai', baseUrl: conn.baseUrl || 'https://api.openai.com/v1', apiKey: conn.apiKey };
     case 'azure':
