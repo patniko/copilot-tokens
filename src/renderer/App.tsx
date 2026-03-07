@@ -18,6 +18,7 @@ import LevelUpOverlay from './components/LevelUpOverlay';
 import TabBar from './components/TabBar';
 import type { ProjectTab, TabActivity } from './components/TabBar';
 import SchedulerPanel from './components/SchedulerPanel';
+import ProfilesModal from './components/ProfilesModal';
 import { useSessionRecorder } from './hooks/useSessionRecorder';
 import { useBadges } from './hooks/useBadges';
 import { addSessionToProgress, type LevelProgress } from './lib/level-system';
@@ -31,6 +32,7 @@ import { useMilestones } from './hooks/useMilestones';
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [packStudioOpen, setPackStudioOpen] = useState(false);
+  const [profilesOpen, setProfilesOpen] = useState(false);
   const [achievementsOpen, setAchievementsOpen] = useState(false);
   const [achievementsTab, setAchievementsTab] = useState<'stats' | 'trophies'>('stats');
   const [replaySessionTimestamp, setReplaySessionTimestamp] = useState<number | null>(null);
@@ -1031,6 +1033,7 @@ export default function App() {
             <div className="shrink-0">
               <AvatarMenu
                 onOpenSettings={() => { setSettingsOpen(true); setPackStudioOpen(false); }}
+                onOpenProfiles={() => { setProfilesOpen(true); }}
                 onOpenAchievements={(tab) => { setAchievementsTab(tab); setAchievementsOpen(true); }}
                 onOpenPackStudio={() => { setPackStudioOpen(true); setSettingsOpen(false); }}
                 demoActive={demoActive}
@@ -1095,6 +1098,7 @@ export default function App() {
         <AchievementsModal isOpen={achievementsOpen} onClose={() => setAchievementsOpen(false)} onReplaySession={(ts) => { setAchievementsOpen(false); setReplaySessionTimestamp(ts); }} initialTab={achievementsTab} />
         <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onModelChange={setCurrentModel} />
         <PackStudio isOpen={packStudioOpen} onClose={() => setPackStudioOpen(false)} />
+        <ProfilesModal isOpen={profilesOpen} onClose={() => setProfilesOpen(false)} />
         <SchedulerPanel
           isOpen={schedulerOpen}
           onClose={() => setSchedulerOpen(false)}
