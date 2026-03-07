@@ -341,6 +341,8 @@ export class CopilotService {
   // Per-panel CWD overrides (for multi-tab support)
   private panelCwds = new Map<string, string>();
   private model: string = 'claude-sonnet-4';
+  // Per-panel excluded tools
+  private panelExcludedTools = new Map<string, string[]>();
 
   // Permission handler set by the IPC layer
   // Returns 'allow' (one-time), 'deny', or 'always' (persist rule)
@@ -348,6 +350,9 @@ export class CopilotService {
 
   // User input handler: renderer provides answers to ask_user requests
   private userInputCallback: ((request: UserInputRequest) => Promise<UserInputResponse>) | null = null;
+
+  // Delegate handler: fires when an agent wants to create a new tab
+  private delegateCallback: ((data: { prompt: string; description?: string; sourcePanelId: string }) => void) | null = null;
 
   private constructor() {}
 
@@ -363,7 +368,7 @@ export class CopilotService {
       this.workingDirectory = dir;
       // Destroy all sessions so they pick up the new CWD
       for (const [id, session] of this.sessions) {
-        session.destroy().catch(() => {});
+        session.disconnect().catch(() => {});
         this.sessions.delete(id);
       }
     }
@@ -377,7 +382,7 @@ export class CopilotService {
       this.panelCwds.set(pid, dir);
       const session = this.sessions.get(pid);
       if (session) {
-        session.destroy().catch(() => {});
+        session.disconnect().catch(() => {});
         this.sessions.delete(pid);
       }
     }
@@ -387,7 +392,7 @@ export class CopilotService {
     if (model && model !== this.model) {
       this.model = model;
       for (const [id, session] of this.sessions) {
-        session.destroy().catch(() => {});
+        session.disconnect().catch(() => {});
         this.sessions.delete(id);
       }
     }
@@ -405,6 +410,24 @@ export class CopilotService {
     this.userInputCallback = handler;
   }
 
+  setDelegateHandler(handler: (data: { prompt: string; description?: string; sourcePanelId: string }) => void): void {
+    this.delegateCallback = handler;
+  }
+
+  /** Set excluded tools for a panel and recycle its session. */
+  setExcludedTools(panelId: string, tools: string[]): void {
+    this.panelExcludedTools.set(panelId, tools);
+    const session = this.sessions.get(panelId);
+    if (session) {
+      session.disconnect().catch(() => {});
+      this.sessions.delete(panelId);
+    }
+  }
+
+  getExcludedTools(panelId: string): string[] {
+    return this.panelExcludedTools.get(panelId) ?? [];
+  }
+
   getFeatures(): FeatureFlags {
     return settingsStore.get('features');
   }
@@ -413,7 +436,7 @@ export class CopilotService {
     settingsStore.set('features', features);
     // Restart sessions to pick up new config
     for (const [id, session] of this.sessions) {
-      session.destroy().catch(() => {});
+      session.disconnect().catch(() => {});
       this.sessions.delete(id);
     }
   }
@@ -425,7 +448,7 @@ export class CopilotService {
   setReasoningEffort(effort: ReasoningEffort | null): void {
     settingsStore.set('reasoningEffort', effort);
     for (const [id, session] of this.sessions) {
-      session.destroy().catch(() => {});
+      session.disconnect().catch(() => {});
       this.sessions.delete(id);
     }
   }
@@ -437,7 +460,7 @@ export class CopilotService {
   setCustomAgents(agents: CustomAgentConfig[]): void {
     settingsStore.set('customAgents', agents);
     for (const [id, session] of this.sessions) {
-      session.destroy().catch(() => {});
+      session.disconnect().catch(() => {});
       this.sessions.delete(id);
     }
   }
@@ -468,7 +491,7 @@ export class CopilotService {
     // Destroy existing session for this panel if any
     const existing = this.sessions.get(panelId);
     if (existing) {
-      await existing.destroy().catch(() => {});
+      await existing.disconnect().catch(() => {});
       this.sessions.delete(panelId);
     }
     const opts = this.buildResumeOpts(panelId);
@@ -484,7 +507,7 @@ export class CopilotService {
     settingsStore.set('systemPrompt', config);
     // Destroy all sessions so the new prompt takes effect
     for (const [id, session] of this.sessions) {
-      session.destroy().catch(() => {});
+      session.disconnect().catch(() => {});
       this.sessions.delete(id);
     }
   }
@@ -565,7 +588,7 @@ export class CopilotService {
       const opts: Record<string, unknown> = {
         model: this.model,
         streaming: true,
-        excludedTools: [],
+        excludedTools: this.panelExcludedTools.get(panelId) ?? [],
         mcpServers: loadMCPServers(),
       };
       if (this.panelCwds.get(panelId) || this.workingDirectory) {
@@ -645,9 +668,32 @@ export class CopilotService {
         };
         opts.hooks = hooks;
       }
-      // Custom tools (native Electron capabilities)
+      // Custom tools (native Electron capabilities + delegate)
       if (features.customTools) {
-        opts.tools = buildNativeTools();
+        const tools = buildNativeTools();
+        // Delegate tool — allows the agent to spin off work into a new tab
+        if (this.delegateCallback) {
+          const delegateCb = this.delegateCallback;
+          const srcPanel = panelId;
+          tools.push({
+            name: 'delegate_to_tab',
+            description: 'Delegate a task to a new tab. Creates a new background tab in the app and starts an independent agent session with the given prompt. The new tab mirrors settings (CWD, model, YOLO mode) from this tab. Use this to parallelize work — for example, delegating a sub-task while you continue working on the main task.',
+            parameters: {
+              type: 'object',
+              properties: {
+                prompt: { type: 'string', description: 'The prompt/task to send to the new agent session in the new tab' },
+                description: { type: 'string', description: 'Short label for the new tab (e.g. "Fix tests", "Update docs")' },
+              },
+              required: ['prompt'],
+            },
+            handler: async (args: unknown) => {
+              const { prompt, description } = args as { prompt: string; description?: string };
+              delegateCb({ prompt, description, sourcePanelId: srcPanel });
+              return `Delegated to new tab${description ? `: "${description}"` : ''}. The new agent session is running independently.`;
+            },
+          });
+        }
+        opts.tools = tools;
       }
       session = await this.client!.createSession(opts as unknown as Parameters<CopilotClientType['createSession']>[0]);
       this.sessions.set(panelId, session);
@@ -659,10 +705,18 @@ export class CopilotService {
   async destroySession(panelId: string): Promise<void> {
     const session = this.sessions.get(panelId);
     if (session) {
-      await session.destroy().catch(() => {});
+      await session.disconnect().catch(() => {});
       this.sessions.delete(panelId);
     }
     this.panelCwds.delete(panelId);
+    this.panelExcludedTools.delete(panelId);
+  }
+
+  /** Return the names of all custom (native/delegate) tools that can be toggled. */
+  getCustomToolNames(): string[] {
+    const names = buildNativeTools().map(t => t.name);
+    if (this.delegateCallback) names.push('delegate_to_tab');
+    return names;
   }
 
   /** Build the common options used when resuming a session. */
@@ -694,7 +748,7 @@ export class CopilotService {
     const entries = [...this.sessions.entries()];
     for (const [panelId, session] of entries) {
       const sid = session.sessionId;
-      await session.destroy().catch(() => {});
+      await session.disconnect().catch(() => {});
       this.sessions.delete(panelId);
       try {
         const opts = this.buildResumeOpts(panelId);
@@ -710,7 +764,7 @@ export class CopilotService {
   /** Tear down the client entirely so it re-initialises with fresh auth on next use. */
   async restartClient(): Promise<void> {
     for (const [, session] of this.sessions) {
-      await session.destroy().catch(() => {});
+      await session.disconnect().catch(() => {});
     }
     this.sessions.clear();
     if (this.client) {
@@ -1015,7 +1069,7 @@ export class CopilotService {
 
   async stop(): Promise<void> {
     for (const [id, session] of this.sessions) {
-      await session.destroy().catch(() => {});
+      await session.disconnect().catch(() => {});
       this.sessions.delete(id);
     }
     if (this.started && this.client) {

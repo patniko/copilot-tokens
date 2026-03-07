@@ -81,7 +81,7 @@ export default function App() {
   const tabCounter = useRef(0);
   const initialTabId = `tab-${tabCounter.current}`;
   const [tabs, setTabs] = useState<ProjectTab[]>([
-    { id: initialTabId, cwd: '', gitBranch: null, changedFiles: [], panels: [{ id: `${initialTabId}:main`, userPrompt: null, resetKey: 0 }], panelCounter: 0, yoloMode: false },
+    { id: initialTabId, cwd: '', gitBranch: null, changedFiles: [], panels: [{ id: `${initialTabId}:main`, userPrompt: null, resetKey: 0 }], panelCounter: 0, yoloMode: false, disabledTools: [] },
   ]);
   const [activeTabId, setActiveTabId] = useState(initialTabId);
   const [tabActivity, setTabActivity] = useState<Record<string, TabActivity>>({});
@@ -542,6 +542,7 @@ export default function App() {
       panels: [{ id: `${newTabId}:main`, userPrompt: null, resetKey: 0 }],
       panelCounter: 0,
       yoloMode: false,
+      disabledTools: [],
     };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTabId);
@@ -629,6 +630,7 @@ export default function App() {
           panels: [{ id: panelId, userPrompt: null, resetKey: Date.now() }],
           panelCounter: 0,
           yoloMode: task.yoloMode,
+          disabledTools: [],
         };
         return [...prev, newTab];
       });
@@ -681,6 +683,78 @@ export default function App() {
       }
     }, schedulerPanelId);
   }, []);
+
+  // --- Delegate tab: agent creates a new tab ---
+  useEffect(() => {
+    if (!window.copilotAPI?.onDelegateTab) return;
+    return window.copilotAPI.onDelegateTab((data) => {
+      // Find the source tab to mirror its settings
+      const sourceTab = tabs.find(t => t.panels.some(p => p.id === data.sourcePanelId));
+      const sourceCwd = sourceTab?.cwd ?? cwd;
+      const sourceYolo = sourceTab?.yoloMode ?? false;
+      const sourceDisabledTools = sourceTab?.disabledTools ?? [];
+
+      tabCounter.current += 1;
+      const newTabId = `tab-${tabCounter.current}`;
+      const panelId = `${newTabId}:main`;
+      const label = data.description || 'Delegated';
+
+      const newTab: ProjectTab = {
+        id: newTabId,
+        cwd: sourceCwd,
+        gitBranch: sourceTab?.gitBranch ?? null,
+        changedFiles: [],
+        panels: [{ id: panelId, userPrompt: null, resetKey: Date.now() }],
+        panelCounter: 0,
+        yoloMode: sourceYolo,
+        disabledTools: sourceDisabledTools,
+      };
+
+      setTabs(prev => [...prev, newTab]);
+      // Don't switch focus — let the delegate run in background
+
+      // Set up CWD + YOLO + disabled tools for the new panel, then send prompt
+      if (sourceCwd) window.cwdAPI?.set(sourceCwd, [panelId]);
+      if (sourceDisabledTools.length > 0) window.copilotAPI?.setExcludedTools(panelId, sourceDisabledTools);
+
+      setTimeout(() => {
+        if (!sessionStartRef.current) sessionStartRef.current = Date.now();
+        // Fire the prompt into the new tab's panel
+        updateTab(newTabId, (tab) => ({
+          ...tab,
+          panels: tab.panels.map(p => p.id === panelId ? { ...p, userPrompt: data.prompt } : p),
+        }));
+        requestAnimationFrame(() => {
+          updateTab(newTabId, (tab) => ({
+            ...tab,
+            panels: tab.panels.map(p => p.id === panelId ? { ...p, userPrompt: null } : p),
+          }));
+        });
+      }, 100);
+
+      console.log(`[Delegate] Created tab "${label}" (${newTabId}) from ${data.sourcePanelId}`);
+    });
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- Tool toggle dropdown state ---
+  const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
+  const [availableTools, setAvailableTools] = useState<string[]>([]);
+
+  useEffect(() => {
+    window.copilotAPI?.getCustomToolNames?.().then(setAvailableTools).catch(() => {});
+  }, []);
+
+  const handleToggleTool = useCallback((toolName: string) => {
+    const current = activeTab.disabledTools;
+    const next = current.includes(toolName)
+      ? current.filter(t => t !== toolName)
+      : [...current, toolName];
+    updateTab(activeTabId, (tab) => ({ ...tab, disabledTools: next }));
+    // Update all panels in this tab
+    for (const panel of activeTab.panels) {
+      window.copilotAPI?.setExcludedTools(panel.id, next);
+    }
+  }, [activeTab, activeTabId, updateTab]);
 
   return (
     <ThemeProvider>
@@ -806,6 +880,59 @@ export default function App() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </>
+            )}
+          </div>
+          <span className="text-[var(--border-color)]">|</span>
+          {/* Tool Toggle Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => { if (availableTools.length === 0) window.copilotAPI?.getCustomToolNames?.().then(setAvailableTools).catch(() => {}); setToolDropdownOpen(!toolDropdownOpen); }}
+              className={`flex items-center gap-1 transition-colors cursor-pointer ${
+                activeTab.disabledTools.length > 0
+                  ? 'text-[var(--accent-gold)] hover:text-[var(--accent-purple)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+              title={`${activeTab.disabledTools.length} tool${activeTab.disabledTools.length !== 1 ? 's' : ''} disabled`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              Tools{activeTab.disabledTools.length > 0 && <span className="text-[10px] opacity-70">−{activeTab.disabledTools.length}</span>}
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${toolDropdownOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
+            </button>
+            {toolDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setToolDropdownOpen(false)} />
+                <div className="absolute top-full left-0 mt-1 z-50 w-64 max-h-80 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
+                  <div className="px-3 py-2 border-b border-[var(--border-color)] text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">
+                    Custom Tools ({availableTools.length})
+                  </div>
+                  {availableTools.length === 0 && (
+                    <div className="px-3 py-3 text-xs text-[var(--text-secondary)]">No custom tools registered</div>
+                  )}
+                  {availableTools.map((name) => {
+                    const isDisabled = activeTab.disabledTools.includes(name);
+                    return (
+                      <button
+                        key={name}
+                        onClick={() => handleToggleTool(name)}
+                        className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors cursor-pointer border-b border-[var(--border-color)] last:border-b-0 ${
+                          isDisabled
+                            ? 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]'
+                            : 'text-[var(--text-primary)] hover:bg-[var(--bg-primary)]'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                          isDisabled
+                            ? 'border-[var(--text-secondary)]'
+                            : 'border-[var(--accent-green)] bg-[var(--accent-green)]/20'
+                        }`}>
+                          {!isDisabled && <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className="text-[var(--accent-green)]"><path d="M1.5 5.5l2 2 5-5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                        </span>
+                        <span className={isDisabled ? 'line-through opacity-60' : ''}>{name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </>
             )}

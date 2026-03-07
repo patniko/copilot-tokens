@@ -127,6 +127,24 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     await copilot.destroySession(panelId);
   });
 
+  // --- Delegate tool: agent can create a new tab ---
+  copilot.setDelegateHandler((data) => {
+    mainWindow.webContents.send('copilot:delegateTab', data);
+  });
+
+  // --- Per-panel tool toggling ---
+  ipcMain.handle('copilot:setExcludedTools', async (_event, panelId: string, tools: string[]) => {
+    copilot.setExcludedTools(panelId, tools);
+  });
+
+  ipcMain.handle('copilot:getExcludedTools', (_event, panelId: string) => {
+    return copilot.getExcludedTools(panelId);
+  });
+
+  ipcMain.handle('copilot:getCustomToolNames', () => {
+    return copilot.getCustomToolNames();
+  });
+
   ipcMain.handle('stats:getTopSessions', (_event, limit: number) => {
     return stats.getTopSessions(limit);
   });

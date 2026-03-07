@@ -67,6 +67,20 @@ contextBridge.exposeInMainWorld('copilotAPI', {
   respondAskUser(answer: string, wasFreeform: boolean): void {
     ipcRenderer.invoke('copilot:askUserResponse', answer, wasFreeform);
   },
+  setExcludedTools(panelId: string, tools: string[]): Promise<void> {
+    return ipcRenderer.invoke('copilot:setExcludedTools', panelId, tools);
+  },
+  getExcludedTools(panelId: string): Promise<string[]> {
+    return ipcRenderer.invoke('copilot:getExcludedTools', panelId);
+  },
+  getCustomToolNames(): Promise<string[]> {
+    return ipcRenderer.invoke('copilot:getCustomToolNames');
+  },
+  onDelegateTab(callback: (data: { prompt: string; description?: string; sourcePanelId: string }) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, data: { prompt: string; description?: string; sourcePanelId: string }) => callback(data);
+    ipcRenderer.on('copilot:delegateTab', listener);
+    return () => ipcRenderer.removeListener('copilot:delegateTab', listener);
+  },
 });
 
 contextBridge.exposeInMainWorld('statsAPI', {

@@ -10,6 +10,7 @@ export interface ProjectTab {
   panels: { id: string; userPrompt: string | null; resetKey: number; initialEvents?: Record<string, unknown>[] }[];
   panelCounter: number;
   yoloMode: boolean;
+  disabledTools: string[];
 }
 
 interface TabBarProps {

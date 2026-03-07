@@ -18,6 +18,10 @@ interface CopilotAPI {
   emitDemoEvent(event: unknown, panelId?: string): void;
   onAskUserRequest(callback: (request: { question: string; choices?: string[]; allowFreeform?: boolean }) => void): () => void;
   respondAskUser(answer: string, wasFreeform: boolean): void;
+  setExcludedTools(panelId: string, tools: string[]): Promise<void>;
+  getExcludedTools(panelId: string): Promise<string[]>;
+  getCustomToolNames(): Promise<string[]>;
+  onDelegateTab(callback: (data: { prompt: string; description?: string; sourcePanelId: string }) => void): () => void;
 }
 
 interface StatsAPI {
