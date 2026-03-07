@@ -28,6 +28,46 @@ function ProfileEditor({ profile, availableModels, onSave, onCancel }: {
 }) {
   const [p, setP] = useState<ConnectionProfile>({ ...profile });
   const conn = p.connection;
+  const [providerModels, setProviderModels] = useState<{ id: string; name: string; owned_by?: string }[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const isBYOK = conn.type === 'anthropic' || conn.type === 'openai' || conn.type === 'azure' || conn.type === 'custom';
+  const hasApiKey = (conn.type === 'anthropic' && conn.apiKey) ||
+    (conn.type === 'openai' && conn.apiKey) ||
+    (conn.type === 'azure' && conn.apiKey && conn.baseUrl) ||
+    (conn.type === 'custom' && conn.baseUrl);
+
+  const handleFetchModels = async () => {
+    setFetchingModels(true);
+    setFetchError(null);
+    try {
+      const models = await window.profilesAPI?.fetchModels(conn);
+      if (models && models.length > 0) {
+        setProviderModels(models);
+        // If no enabled models set yet, enable all by default
+        if (!p.enabledModels?.length) {
+          setP(prev => ({ ...prev, enabledModels: models.map(m => m.id) }));
+        }
+      } else {
+        setFetchError('No models returned. Check your API key and endpoint.');
+      }
+    } catch {
+      setFetchError('Failed to connect. Verify your credentials.');
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
+  const toggleModel = (modelId: string) => {
+    setP(prev => {
+      const current = prev.enabledModels ?? providerModels.map(m => m.id);
+      const next = current.includes(modelId)
+        ? current.filter(id => id !== modelId)
+        : [...current, modelId];
+      return { ...prev, enabledModels: next };
+    });
+  };
 
   const updateConn = (updates: Partial<ProfileConnection>) => {
     setP(prev => ({ ...prev, connection: { ...prev.connection, ...updates } as ProfileConnection }));
@@ -204,20 +244,103 @@ function ProfileEditor({ profile, availableModels, onSave, onCancel }: {
         </>
       )}
 
-      {/* Model override */}
-      <div>
-        <label className="text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">Default Model (optional)</label>
-        <select
-          value={p.model ?? ''}
-          onChange={e => setP(prev => ({ ...prev, model: e.target.value || undefined }))}
-          className="mt-1 w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm cursor-pointer"
-        >
-          <option value="">Use global default</option>
-          {availableModels.map(m => (
-            <option key={m.id} value={m.id}>{m.name}</option>
-          ))}
-        </select>
-      </div>
+      {/* Models */}
+      {isBYOK ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">Models</label>
+            <button
+              onClick={handleFetchModels}
+              disabled={!hasApiKey || fetchingModels}
+              className="text-[10px] px-2 py-1 rounded border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--accent-blue)] hover:text-[var(--accent-blue)] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {fetchingModels ? '⏳ Fetching…' : '🔄 Fetch Available Models'}
+            </button>
+          </div>
+          {!hasApiKey && (
+            <p className="text-[10px] text-[var(--text-secondary)]">Enter credentials above, then fetch to discover available models.</p>
+          )}
+          {fetchError && (
+            <p className="text-[10px] text-red-400">{fetchError}</p>
+          )}
+          {providerModels.length > 0 && (
+            <>
+              <div className="flex items-center justify-between text-[10px] text-[var(--text-secondary)]">
+                <span>{providerModels.length} models found · {(p.enabledModels ?? providerModels.map(m => m.id)).length} enabled</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setP(prev => ({ ...prev, enabledModels: providerModels.map(m => m.id) }))}
+                    className="text-[var(--accent-blue)] hover:underline cursor-pointer"
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setP(prev => ({ ...prev, enabledModels: [] }))}
+                    className="text-[var(--text-secondary)] hover:underline cursor-pointer"
+                  >
+                    None
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)]">
+                {providerModels.map(m => {
+                  const enabled = (p.enabledModels ?? providerModels.map(x => x.id)).includes(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => toggleModel(m.id)}
+                      className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 border-b border-[var(--border-color)] last:border-b-0 transition-colors cursor-pointer ${
+                        enabled ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)] opacity-50'
+                      } hover:bg-[var(--bg-secondary)]`}
+                    >
+                      <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                        enabled
+                          ? 'border-[var(--accent-green)] bg-[var(--accent-green)]/20'
+                          : 'border-[var(--text-secondary)]'
+                      }`}>
+                        {enabled && <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--accent-green)]"><path d="M1.5 5.5l2 2 5-5"/></svg>}
+                      </span>
+                      <span className="truncate flex-1">{m.name}</span>
+                      {m.owned_by && <span className="text-[10px] opacity-40 shrink-0">{m.owned_by}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          {/* Default model from the enabled list */}
+          {(providerModels.length > 0 || p.enabledModels?.length) && (
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">Default Model</label>
+              <select
+                value={p.model ?? ''}
+                onChange={e => setP(prev => ({ ...prev, model: e.target.value || undefined }))}
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm cursor-pointer"
+              >
+                <option value="">None (use first available)</option>
+                {(p.enabledModels ?? providerModels.map(m => m.id)).map(id => {
+                  const m = providerModels.find(x => x.id === id);
+                  return <option key={id} value={id}>{m?.name ?? id}</option>;
+                })}
+              </select>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">Default Model (optional)</label>
+          <select
+            value={p.model ?? ''}
+            onChange={e => setP(prev => ({ ...prev, model: e.target.value || undefined }))}
+            className="mt-1 w-full px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm cursor-pointer"
+          >
+            <option value="">Use global default</option>
+            {availableModels.map(m => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Save */}
       <div className="flex gap-2 mt-2">

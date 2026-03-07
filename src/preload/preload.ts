@@ -293,6 +293,9 @@ contextBridge.exposeInMainWorld('profilesAPI', {
     ipcRenderer.on('profiles:changed', listener);
     return () => ipcRenderer.removeListener('profiles:changed', listener);
   },
+  fetchModels(connection: unknown): Promise<{ id: string; name: string; owned_by?: string }[]> {
+    return ipcRenderer.invoke('profiles:fetchModels', connection);
+  },
 });
 
 contextBridge.exposeInMainWorld('authAPI', {

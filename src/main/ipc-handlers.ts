@@ -662,6 +662,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return copilot.getPanelProfile(panelId);
   });
 
+  ipcMain.handle('profiles:fetchModels', async (_event, connection: import('./profile-service').ProfileConnection) => {
+    return profiles.fetchProviderModels(connection);
+  });
+
   // ── Auth ──
 
   ipcMain.handle('auth:getCliUser', async () => {

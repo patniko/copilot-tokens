@@ -151,6 +151,7 @@ interface ProfilesAPI {
   setPanelProfile(panelId: string, profileId: string): Promise<void>;
   getPanelProfile(panelId: string): Promise<string | undefined>;
   onProfileChanged(callback: (data: { id: string; profile: ConnectionProfile }) => void): () => void;
+  fetchModels(connection: ConnectionProfile['connection']): Promise<{ id: string; name: string; owned_by?: string }[]>;
 }
 
 interface WindowAPI {

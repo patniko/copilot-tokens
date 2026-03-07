@@ -582,6 +582,11 @@ export class CopilotService {
   }
 
   async listModels(): Promise<{ id: string; name: string; contextWindow: number }[]> {
+    // If active profile is BYOK with curated enabledModels, return those instead of CLI models
+    const profile = getActiveProfile();
+    if (profile.enabledModels?.length) {
+      return profile.enabledModels.map(id => ({ id, name: id, contextWindow: 0 }));
+    }
     await this.ensureStarted();
     const models = await this.client!.listModels();
     return models.map(m => ({

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { safeStorage } from 'electron';
+import { net, safeStorage } from 'electron';
 import Store from 'electron-store';
 import { DATA_DIR } from './data-dir';
 
@@ -21,6 +21,7 @@ export interface ConnectionProfile {
   authSource?: 'cli' | 'oauth';
   oauthToken?: string;
   model?: string;
+  enabledModels?: string[];       // user-curated subset of available models for this profile
   excludedTools?: string[];
   skillDirectories?: string[];
   disabledSkills?: string[];
@@ -174,4 +175,104 @@ export function createProfile(data: Omit<ConnectionProfile, 'id'>): ConnectionPr
   const profile: ConnectionProfile = { ...data, id: randomUUID() };
   saveProfile(profile);
   return profile;
+}
+
+// ── Provider model discovery ──
+
+export interface ProviderModel {
+  id: string;
+  name: string;
+  owned_by?: string;
+}
+
+/** Helper for HTTPS requests using Electron's net module. */
+function netRequest(
+  url: string,
+  opts: { method?: string; headers?: Record<string, string> },
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = net.request({ url, method: opts.method ?? 'GET' });
+    for (const [k, v] of Object.entries(opts.headers ?? {})) {
+      req.setHeader(k, v);
+    }
+    let body = '';
+    req.on('response', (response) => {
+      response.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      response.on('end', () => resolve({ status: response.statusCode, body }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/** Fetch available models from a BYOK provider. Returns empty array for copilot connections. */
+export async function fetchProviderModels(connection: ProfileConnection): Promise<ProviderModel[]> {
+  try {
+    switch (connection.type) {
+      case 'anthropic': {
+        const res = await netRequest('https://api.anthropic.com/v1/models?limit=100', {
+          headers: {
+            'x-api-key': connection.apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+        });
+        if (res.status !== 200) throw new Error(`Anthropic API ${res.status}`);
+        const data = JSON.parse(res.body);
+        return (data.data ?? []).map((m: Record<string, unknown>) => ({
+          id: m.id as string,
+          name: (m.display_name as string) ?? (m.id as string),
+          owned_by: 'anthropic',
+        }));
+      }
+      case 'openai': {
+        const baseUrl = connection.baseUrl || 'https://api.openai.com/v1';
+        const res = await netRequest(`${baseUrl.replace(/\/$/, '')}/models`, {
+          headers: { Authorization: `Bearer ${connection.apiKey}` },
+        });
+        if (res.status !== 200) throw new Error(`OpenAI API ${res.status}`);
+        const data = JSON.parse(res.body);
+        return (data.data ?? [])
+          .map((m: Record<string, unknown>) => ({
+            id: m.id as string,
+            name: m.id as string,
+            owned_by: (m.owned_by as string) ?? undefined,
+          }))
+          .sort((a: ProviderModel, b: ProviderModel) => a.id.localeCompare(b.id));
+      }
+      case 'azure': {
+        // Azure: GET {baseUrl}/openai/models?api-version={version}
+        const version = connection.apiVersion || '2024-10-21';
+        const res = await netRequest(
+          `${connection.baseUrl.replace(/\/$/, '')}/openai/models?api-version=${version}`,
+          { headers: { 'api-key': connection.apiKey } },
+        );
+        if (res.status !== 200) throw new Error(`Azure API ${res.status}`);
+        const data = JSON.parse(res.body);
+        return (data.data ?? []).map((m: Record<string, unknown>) => ({
+          id: m.id as string,
+          name: m.id as string,
+          owned_by: 'azure',
+        }));
+      }
+      case 'custom': {
+        // Try OpenAI-compatible /models endpoint
+        if (!connection.baseUrl) return [];
+        const headers: Record<string, string> = {};
+        if (connection.apiKey) headers.Authorization = `Bearer ${connection.apiKey}`;
+        if (connection.bearerToken) headers.Authorization = `Bearer ${connection.bearerToken}`;
+        const res = await netRequest(`${connection.baseUrl.replace(/\/$/, '')}/models`, { headers });
+        if (res.status !== 200) return [];
+        const data = JSON.parse(res.body);
+        return (data.data ?? []).map((m: Record<string, unknown>) => ({
+          id: m.id as string,
+          name: m.id as string,
+        }));
+      }
+      default:
+        return [];
+    }
+  } catch (err) {
+    console.warn('[ProfileService] Failed to fetch provider models:', err);
+    return [];
+  }
 }
