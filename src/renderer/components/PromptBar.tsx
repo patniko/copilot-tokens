@@ -366,7 +366,7 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
           onPaste={handlePaste}
           placeholder={attachments.length > 0 ? 'Add a message or press Enter to send…' : isGenerating ? 'Type to steer or queue next message…' : 'Enter your prompt…'}
           rows={1}
-          className="w-full bg-transparent outline-none text-[var(--text-primary)] placeholder-[var(--text-secondary)] resize-none rounded-xl border border-[var(--border-color)] pl-11 pr-20 py-3 focus:border-[var(--accent-purple)] focus:shadow-[0_0_8px_var(--accent-purple)] transition-shadow"
+          className="w-full bg-transparent outline-none text-[var(--text-primary)] placeholder-[var(--text-secondary)] resize-none rounded-xl border border-[var(--border-color)] pl-11 pr-28 py-3 focus:border-[var(--accent-purple)] focus:shadow-[0_0_8px_var(--accent-purple)] transition-shadow"
           style={{ lineHeight: `${LINE_HEIGHT}px` }}
         />
 
@@ -385,14 +385,14 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
         {/* Attach button — bottom left inside textarea */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="absolute left-3 bottom-2.5 z-20 flex items-center justify-center w-7 h-7 rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-purple)] transition-colors cursor-pointer"
+          className="absolute left-3 bottom-[11px] z-20 flex items-center justify-center w-7 h-7 rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-purple)] transition-colors cursor-pointer"
           title="Attach image"
         >
           📎
         </button>
 
         {/* Right-side buttons — bottom right inside textarea */}
-        <div className="absolute right-2.5 bottom-2 z-20 flex items-center gap-1">
+        <div className="absolute right-3 bottom-[9px] z-20 flex items-center gap-1.5">
           {/* Session menu (⋯) */}
           <div className="relative">
             <button
@@ -469,7 +469,7 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.15 }}
                 onClick={handleAbort}
-                className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-600 text-white cursor-pointer"
+                className="flex items-center justify-center w-7 h-7 rounded-lg bg-red-600 text-white cursor-pointer"
                 title="Stop generating"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -484,7 +484,7 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.15 }}
                 onClick={handleSend}
-                className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--accent-gold)] text-black cursor-pointer"
+                className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--accent-gold)] text-black cursor-pointer"
                 title="Send (Enter)"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
