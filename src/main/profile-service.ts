@@ -210,19 +210,34 @@ export async function fetchProviderModels(connection: ProfileConnection): Promis
   try {
     switch (connection.type) {
       case 'anthropic': {
-        const res = await netRequest('https://api.anthropic.com/v1/models?limit=100', {
-          headers: {
-            'x-api-key': connection.apiKey,
-            'anthropic-version': '2023-06-01',
-          },
+        // Fetch from OpenAI-compatible endpoint since we route through /v1/chat/completions
+        const res = await netRequest('https://api.anthropic.com/v1/models', {
+          headers: { Authorization: `Bearer ${connection.apiKey}` },
         });
-        if (res.status !== 200) throw new Error(`Anthropic API ${res.status}`);
+        if (res.status !== 200) {
+          // Fall back to native Anthropic models endpoint
+          const nativeRes = await netRequest('https://api.anthropic.com/v1/models?limit=100', {
+            headers: {
+              'x-api-key': connection.apiKey,
+              'anthropic-version': '2023-06-01',
+            },
+          });
+          if (nativeRes.status !== 200) throw new Error(`Anthropic API ${nativeRes.status}`);
+          const nativeData = JSON.parse(nativeRes.body);
+          return (nativeData.data ?? []).map((m: Record<string, unknown>) => ({
+            id: m.id as string,
+            name: (m.display_name as string) ?? (m.id as string),
+            owned_by: 'anthropic',
+          }));
+        }
         const data = JSON.parse(res.body);
-        return (data.data ?? []).map((m: Record<string, unknown>) => ({
-          id: m.id as string,
-          name: (m.display_name as string) ?? (m.id as string),
-          owned_by: 'anthropic',
-        }));
+        return (data.data ?? [])
+          .map((m: Record<string, unknown>) => ({
+            id: m.id as string,
+            name: m.id as string,
+            owned_by: 'anthropic',
+          }))
+          .sort((a: ProviderModel, b: ProviderModel) => a.id.localeCompare(b.id));
       }
       case 'openai': {
         const baseUrl = connection.baseUrl || 'https://api.openai.com/v1';
