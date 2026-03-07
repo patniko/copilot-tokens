@@ -8,6 +8,7 @@ import { PermissionService } from './permission-service';
 import { SchedulerService, type ScheduledTask } from './scheduler-service';
 import * as auth from './auth-service';
 import * as packs from './pack-service';
+import * as profiles from './profile-service';
 
 function parseNumstat(stdout: string): { filesChanged: number; linesAdded: number; linesRemoved: number; files: string[] } {
   const lines = stdout.trim().split('\n').filter(Boolean);
@@ -621,6 +622,44 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('settings:setCliMode', (_event, mode: import('./copilot-service').CliMode) => {
     copilot.setCliMode(mode);
+  });
+
+  // ── Profiles ──
+
+  ipcMain.handle('profiles:list', () => {
+    return profiles.listProfiles();
+  });
+
+  ipcMain.handle('profiles:save', (_event, profile: import('./profile-service').ConnectionProfile) => {
+    profiles.saveProfile(profile);
+  });
+
+  ipcMain.handle('profiles:create', (_event, data: Omit<import('./profile-service').ConnectionProfile, 'id'>) => {
+    return profiles.createProfile(data);
+  });
+
+  ipcMain.handle('profiles:delete', (_event, id: string) => {
+    profiles.deleteProfile(id);
+  });
+
+  ipcMain.handle('profiles:getActive', () => {
+    return { id: profiles.getActiveProfileId(), profile: profiles.getActiveProfile() };
+  });
+
+  ipcMain.handle('profiles:setActive', async (_event, id: string) => {
+    const previousId = profiles.getActiveProfileId();
+    profiles.setActiveProfileId(id);
+    await copilot.applyProfile(previousId);
+    // Refresh model list for new profile's backend
+    mainWindow.webContents.send('profiles:changed', { id, profile: profiles.getActiveProfile() });
+  });
+
+  ipcMain.handle('profiles:setPanelProfile', (_event, panelId: string, profileId: string) => {
+    copilot.setPanelProfile(panelId, profileId);
+  });
+
+  ipcMain.handle('profiles:getPanelProfile', (_event, panelId: string) => {
+    return copilot.getPanelProfile(panelId);
   });
 
   // ── Auth ──

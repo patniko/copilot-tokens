@@ -263,6 +263,38 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   },
 });
 
+contextBridge.exposeInMainWorld('profilesAPI', {
+  list(): Promise<unknown[]> {
+    return ipcRenderer.invoke('profiles:list');
+  },
+  save(profile: unknown): Promise<void> {
+    return ipcRenderer.invoke('profiles:save', profile);
+  },
+  create(data: unknown): Promise<unknown> {
+    return ipcRenderer.invoke('profiles:create', data);
+  },
+  delete(id: string): Promise<void> {
+    return ipcRenderer.invoke('profiles:delete', id);
+  },
+  getActive(): Promise<{ id: string; profile: unknown }> {
+    return ipcRenderer.invoke('profiles:getActive');
+  },
+  setActive(id: string): Promise<void> {
+    return ipcRenderer.invoke('profiles:setActive', id);
+  },
+  setPanelProfile(panelId: string, profileId: string): Promise<void> {
+    return ipcRenderer.invoke('profiles:setPanelProfile', panelId, profileId);
+  },
+  getPanelProfile(panelId: string): Promise<string | undefined> {
+    return ipcRenderer.invoke('profiles:getPanelProfile', panelId);
+  },
+  onProfileChanged(callback: (data: { id: string; profile: unknown }) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, data: { id: string; profile: unknown }) => callback(data);
+    ipcRenderer.on('profiles:changed', listener);
+    return () => ipcRenderer.removeListener('profiles:changed', listener);
+  },
+});
+
 contextBridge.exposeInMainWorld('authAPI', {
   getCliUser(): Promise<unknown> {
     return ipcRenderer.invoke('auth:getCliUser');

@@ -5,6 +5,7 @@ import { app } from 'electron';
 import { execSync } from 'child_process';
 import Store from 'electron-store';
 import { getPersistedOAuthToken, getActiveSource } from './auth-service';
+import { getActiveProfile, getActiveProfileId, getProfile, type ConnectionProfile, type ProfileConnection } from './profile-service';
 
 // Dynamic import to load ESM SDK in Electron's CJS main process
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -331,6 +332,22 @@ if (settingsStore.get('reasoningEffort') === 'medium') {
   settingsStore.set('reasoningEffort', null);
 }
 
+/** Map a profile connection to the SDK ProviderConfig (for BYOK). Returns null for Copilot-native connections. */
+function buildProviderConfig(conn: ProfileConnection): Record<string, unknown> | null {
+  switch (conn.type) {
+    case 'anthropic':
+      return { type: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', apiKey: conn.apiKey };
+    case 'openai':
+      return { type: 'openai', baseUrl: conn.baseUrl || 'https://api.openai.com/v1', apiKey: conn.apiKey };
+    case 'azure':
+      return { type: 'azure', baseUrl: conn.baseUrl, apiKey: conn.apiKey, azure: { apiVersion: conn.apiVersion ?? '2024-10-21' } };
+    case 'custom':
+      return { type: 'openai', baseUrl: conn.baseUrl, apiKey: conn.apiKey, bearerToken: conn.bearerToken };
+    default:
+      return null; // copilot-cli and copilot-remote don't use session-level provider
+  }
+}
+
 export class CopilotService {
   private static instance: CopilotService;
   private client: CopilotClientType | null = null;
@@ -343,6 +360,8 @@ export class CopilotService {
   private model: string = 'claude-sonnet-4';
   // Per-panel excluded tools
   private panelExcludedTools = new Map<string, string[]>();
+  // Per-panel profile overrides (panelId → profileId). Falls back to global active profile.
+  private panelProfiles = new Map<string, string>();
 
   // Permission handler set by the IPC layer
   // Returns 'allow' (one-time), 'deny', or 'always' (persist rule)
@@ -428,6 +447,31 @@ export class CopilotService {
     return this.panelExcludedTools.get(panelId) ?? [];
   }
 
+  /** Set a per-panel profile override. */
+  setPanelProfile(panelId: string, profileId: string): void {
+    this.panelProfiles.set(panelId, profileId);
+    // Recycle this panel's session to pick up new profile
+    const session = this.sessions.get(panelId);
+    if (session) {
+      session.disconnect().catch(() => {});
+      this.sessions.delete(panelId);
+    }
+  }
+
+  getPanelProfile(panelId: string): string | undefined {
+    return this.panelProfiles.get(panelId);
+  }
+
+  /** Resolve the effective profile for a panel (panel override → global active). */
+  resolveProfileForPanel(panelId: string): ConnectionProfile {
+    const panelProfileId = this.panelProfiles.get(panelId);
+    if (panelProfileId) {
+      const p = getProfile(panelProfileId);
+      if (p) return p;
+    }
+    return getActiveProfile();
+  }
+
   getFeatures(): FeatureFlags {
     return settingsStore.get('features');
   }
@@ -473,6 +517,31 @@ export class CopilotService {
     settingsStore.set('cliMode', mode);
     // Tear down client so ensureStarted re-creates it with new mode
     this.stop();
+  }
+
+  /** Switch to a new active profile. Restarts client if CLI backend changed, otherwise just recycles sessions. */
+  async applyProfile(previousProfileId: string): Promise<void> {
+    const prev = getProfile(previousProfileId);
+    const next = getActiveProfile();
+
+    const prevIsCliBackend = !prev || prev.connection.type === 'copilot-cli' || prev.connection.type === 'copilot-remote';
+    const nextIsCliBackend = next.connection.type === 'copilot-cli' || next.connection.type === 'copilot-remote';
+
+    // If CLI backend type changed, full client restart is needed
+    const needsClientRestart = prevIsCliBackend !== nextIsCliBackend
+      || (prev?.connection.type !== next.connection.type)
+      || (prev?.connection.type === 'copilot-cli' && next.connection.type === 'copilot-cli' && prev.connection.cliMode !== next.connection.cliMode)
+      || (prev?.connection.type === 'copilot-remote' && next.connection.type === 'copilot-remote' && prev.connection.url !== next.connection.url);
+
+    if (needsClientRestart) {
+      await this.stop();
+    } else {
+      // Just recycle sessions — provider/model/tools changed at session level
+      for (const [id, session] of this.sessions) {
+        session.disconnect().catch(() => {});
+        this.sessions.delete(id);
+      }
+    }
   }
 
   async listSessions(): Promise<{ sessionId: string; startTime: string; modifiedTime: string; summary?: string }[]> {
@@ -532,15 +601,16 @@ export class CopilotService {
   async ensureStarted(): Promise<void> {
     if (!this.started) {
       const { CopilotClient } = await loadSDK();
-      const cliMode = this.getCliMode();
       const opts: Record<string, unknown> = { autoStart: false };
 
-      if (cliMode.type === 'remote') {
-        // Connect to an existing CLI server — don't spawn a process
-        opts.cliUrl = cliMode.url;
-        console.log('[CopilotService] Using remote CLI at', cliMode.url);
-      } else if (cliMode.type === 'installed') {
-        // Use the system-installed CLI binary
+      // Derive CLI backend from active profile's connection type
+      const profile = getActiveProfile();
+      const conn = profile.connection;
+
+      if (conn.type === 'copilot-remote') {
+        opts.cliUrl = conn.url;
+        console.log('[CopilotService] Using remote CLI at', conn.url);
+      } else if (conn.type === 'copilot-cli' && conn.cliMode === 'installed') {
         const systemPath = resolveSystemCli();
         if (systemPath) {
           opts.cliPath = systemPath;
@@ -552,7 +622,7 @@ export class CopilotService {
           console.log('[CopilotService] Resolved bundled CLI path:', cliPath || '(SDK default)');
         }
       } else {
-        // 'bundled' — prefer the native binary shipped inside the app
+        // 'copilot-cli' bundled, or BYOK profiles (still use bundled CLI as backend)
         const cliPath = resolveBundledCliPath();
         if (cliPath) opts.cliPath = cliPath;
         console.log('[CopilotService] Resolved bundled CLI path:', cliPath || '(SDK default)');
@@ -566,8 +636,10 @@ export class CopilotService {
         opts.env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
       }
 
-      // Pass OAuth token to the SDK so it uses the same auth as the app
-      if (getActiveSource() === 'oauth') {
+      // Auth token: prefer profile's oauthToken, then fall back to global OAuth
+      if (profile.oauthToken) {
+        opts.githubToken = profile.oauthToken;
+      } else if (profile.authSource === 'oauth' || getActiveSource() === 'oauth') {
         const token = getPersistedOAuthToken();
         if (token) {
           opts.githubToken = token;
@@ -585,12 +657,36 @@ export class CopilotService {
     let session = this.sessions.get(panelId);
     if (!session) {
       const features = this.getFeatures();
+      const profile = this.resolveProfileForPanel(panelId);
+
+      // Merge excluded tools: panel-level overrides + profile defaults
+      const panelExcluded = this.panelExcludedTools.get(panelId) ?? [];
+      const profileExcluded = profile.excludedTools ?? [];
+      const allExcluded = [...new Set([...panelExcluded, ...profileExcluded])];
+
+      const effectiveModel = profile.model || this.model;
+
       const opts: Record<string, unknown> = {
-        model: this.model,
+        model: effectiveModel,
         streaming: true,
-        excludedTools: this.panelExcludedTools.get(panelId) ?? [],
+        excludedTools: allExcluded,
         mcpServers: loadMCPServers(),
       };
+
+      // Provider config from BYOK profiles (session-level — enables per-panel providers)
+      const provider = buildProviderConfig(profile.connection);
+      if (provider) {
+        opts.provider = provider;
+      }
+
+      // Skill directories / disabled skills from profile
+      if (profile.skillDirectories?.length) {
+        opts.skillDirectories = profile.skillDirectories;
+      }
+      if (profile.disabledSkills?.length) {
+        opts.disabledSkills = profile.disabledSkills;
+      }
+
       if (this.panelCwds.get(panelId) || this.workingDirectory) {
         opts.workingDirectory = this.panelCwds.get(panelId) || this.workingDirectory;
       }
@@ -622,7 +718,7 @@ export class CopilotService {
       if (features.reasoning && effort) {
         try {
           const models = await this.client!.listModels();
-          const info = models.find(m => m.id === this.model);
+          const info = models.find(m => m.id === effectiveModel);
           if (info?.capabilities?.supports?.reasoningEffort) {
             opts.reasoningEffort = effort;
           }
@@ -710,6 +806,7 @@ export class CopilotService {
     }
     this.panelCwds.delete(panelId);
     this.panelExcludedTools.delete(panelId);
+    this.panelProfiles.delete(panelId);
   }
 
   /** Return the names of all custom (native/delegate) tools that can be toggled. */

@@ -1,5 +1,6 @@
 import type { SessionStats, LifetimeStats, Achievement, SessionEvent, SessionEventLog, LevelProgressData } from '../../main/stats-service';
 import type { GitHubUser, AuthSource } from '../../main/auth-service';
+import type { ConnectionProfile } from '../../main/profile-service';
 import type { MilestonePack, SoundPack, ThemePack } from '../lib/pack-types';
 
 interface CopilotAPI {
@@ -140,6 +141,18 @@ interface AuthAPI {
   logoutOAuth(): Promise<void>;
 }
 
+interface ProfilesAPI {
+  list(): Promise<ConnectionProfile[]>;
+  save(profile: ConnectionProfile): Promise<void>;
+  create(data: Omit<ConnectionProfile, 'id'>): Promise<ConnectionProfile>;
+  delete(id: string): Promise<void>;
+  getActive(): Promise<{ id: string; profile: ConnectionProfile }>;
+  setActive(id: string): Promise<void>;
+  setPanelProfile(panelId: string, profileId: string): Promise<void>;
+  getPanelProfile(panelId: string): Promise<string | undefined>;
+  onProfileChanged(callback: (data: { id: string; profile: ConnectionProfile }) => void): () => void;
+}
+
 interface WindowAPI {
   onFullscreenChange(callback: (isFullscreen: boolean) => void): () => void;
 }
@@ -187,6 +200,7 @@ declare global {
     packAPI: PackAPI;
     settingsAPI: SettingsAPI;
     authAPI: AuthAPI;
+    profilesAPI: ProfilesAPI;
     featuresAPI: FeaturesAPI;
     sessionsAPI: SessionsAPI;
     agentsAPI: AgentsAPI;
