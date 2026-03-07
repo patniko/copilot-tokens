@@ -385,14 +385,14 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
         {/* Attach button — bottom left inside textarea */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="absolute left-3 bottom-[11px] z-20 flex items-center justify-center w-7 h-7 rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-purple)] transition-colors cursor-pointer"
+          className="absolute left-3 bottom-[14px] z-20 flex items-center justify-center w-7 h-7 rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-purple)] transition-colors cursor-pointer"
           title="Attach image"
         >
           📎
         </button>
 
         {/* Right-side buttons — bottom right inside textarea */}
-        <div className="absolute right-3 bottom-[9px] z-20 flex items-center gap-1.5">
+        <div className="absolute right-3 bottom-[13px] z-20 flex items-center gap-1.5">
           {/* Session menu (⋯) */}
           <div className="relative">
             <button
