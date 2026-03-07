@@ -439,18 +439,18 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.15 }}
-              className="relative flex items-stretch"
+              className="relative flex items-center"
             >
               <button
                 onClick={handleSend}
-                className="px-3 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-l-lg cursor-pointer flex items-center justify-center"
+                className="px-3 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-l-lg cursor-pointer flex items-center justify-center self-stretch"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>
-              <div className="w-px bg-black/20" />
+              <div className="w-px bg-black/20 self-stretch" />
               <button
                 onClick={() => setSendMenuOpen(!sendMenuOpen)}
-                className="px-1.5 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-r-lg cursor-pointer flex items-center justify-center hover:bg-[var(--accent-gold)]/80 transition-colors"
+                className="px-1.5 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-r-lg cursor-pointer flex items-center justify-center self-stretch hover:bg-[var(--accent-gold)]/80 transition-colors"
               >
                 <svg width="10" height="10" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${sendMenuOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
               </button>
