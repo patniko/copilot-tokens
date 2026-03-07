@@ -280,6 +280,28 @@ export default function App() {
     });
   }, []);
 
+  // Refresh model list when active profile changes
+  useEffect(() => {
+    const unsub = window.profilesAPI?.onProfileChanged(() => {
+      if (window.modelAPI) {
+        setModelsLoading(true);
+        setModelsError(null);
+        window.modelAPI.refresh().then((models) => {
+          setAvailableModels(models);
+          window.modelAPI!.get().then((saved) => {
+            const match = models.find(m => m.id === saved);
+            setCurrentModel(match ? saved : models[0]?.id ?? '');
+            setModelsLoading(false);
+          });
+        }).catch((err) => {
+          setModelsError(err?.message || 'Failed to load models');
+          setModelsLoading(false);
+        });
+      }
+    });
+    return () => unsub?.();
+  }, []);
+
   const handleBrowseCwd = useCallback(async () => {
     if (!window.cwdAPI) return;
     const panelIds = tabs.find(t => t.id === activeTabId)?.panels.map(p => p.id);
