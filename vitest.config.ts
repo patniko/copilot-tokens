@@ -15,5 +15,11 @@ export default defineConfig({
       ['src/main/**', 'node'],
     ],
     globals: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary', 'json-summary'],
+      include: ['src/**/*.ts', 'src/**/*.tsx'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/**/*.d.ts', 'src/renderer/types/**'],
+    },
   },
 });
