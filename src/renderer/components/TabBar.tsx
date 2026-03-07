@@ -13,6 +13,7 @@ export interface ProjectTab {
   disabledTools: string[];
   profileId: string;
   currentModel: string;
+  reasoningEffort: string | null;
 }
 
 interface TabBarProps {

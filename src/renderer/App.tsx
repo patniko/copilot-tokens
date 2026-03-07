@@ -40,8 +40,8 @@ export default function App() {
   const [levelUpLevel, setLevelUpLevel] = useState<number | null>(null);
   const [inputTokens, setInputTokens] = useState(0);
   // Per-profile model cache: profileId → models[]
-  const modelCacheRef = useRef<Map<string, { id: string; name: string; contextWindow: number }[]>>(new Map());
-  const [availableModels, setAvailableModels] = useState<{ id: string; name: string; contextWindow: number }[]>([]);
+  const modelCacheRef = useRef<Map<string, ModelInfoData[]>>(new Map());
+  const [availableModels, setAvailableModels] = useState<ModelInfoData[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
@@ -82,7 +82,7 @@ export default function App() {
   const tabCounter = useRef(0);
   const initialTabId = `tab-${tabCounter.current}`;
   const [tabs, setTabs] = useState<ProjectTab[]>([
-    { id: initialTabId, cwd: '', gitBranch: null, changedFiles: [], panels: [{ id: `${initialTabId}:main`, userPrompt: null, resetKey: 0 }], panelCounter: 0, yoloMode: false, disabledTools: [], profileId: 'default', currentModel: '' },
+    { id: initialTabId, cwd: '', gitBranch: null, changedFiles: [], panels: [{ id: `${initialTabId}:main`, userPrompt: null, resetKey: 0 }], panelCounter: 0, yoloMode: false, disabledTools: [], profileId: 'default', currentModel: '', reasoningEffort: null },
   ]);
   const [activeTabId, setActiveTabId] = useState(initialTabId);
   const [tabActivity, setTabActivity] = useState<Record<string, TabActivity>>({});
@@ -670,6 +670,7 @@ export default function App() {
       disabledTools: [...sourceTab.disabledTools],
       profileId: sourceTab.profileId,
       currentModel: sourceTab.currentModel,
+      reasoningEffort: sourceTab.reasoningEffort,
     };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTabId);
@@ -798,6 +799,7 @@ export default function App() {
           disabledTools: [],
           profileId: 'default',
           currentModel: task.model,
+          reasoningEffort: null,
         };
         return [...prev, newTab];
       });
@@ -861,6 +863,7 @@ export default function App() {
       const sourceDisabledTools = sourceTab?.disabledTools ?? [];
       const sourceProfileId = sourceTab?.profileId ?? 'default';
       const sourceModel = sourceTab?.currentModel ?? '';
+      const sourceReasoning = sourceTab?.reasoningEffort ?? null;
 
       tabCounter.current += 1;
       const newTabId = `tab-${tabCounter.current}`;
@@ -878,6 +881,7 @@ export default function App() {
         disabledTools: sourceDisabledTools,
         profileId: sourceProfileId,
         currentModel: sourceModel,
+        reasoningEffort: sourceReasoning,
       };
 
       setTabs(prev => [...prev, newTab]);
@@ -1059,6 +1063,41 @@ export default function App() {
               </>
             )}
           </div>
+          {/* Reasoning Effort (shown only for models that support it) */}
+          {(() => {
+            const modelInfo = availableModels.find(m => m.id === currentModel);
+            const efforts = modelInfo?.supportedReasoningEfforts;
+            if (!efforts?.length) return null;
+            const current = activeTab.reasoningEffort || modelInfo?.defaultReasoningEffort || null;
+            const labels: Record<string, string> = { low: 'Low', medium: 'Med', high: 'High', xhigh: 'Max' };
+            const icons: Record<string, string> = { low: '🧊', medium: '🧠', high: '🔥', xhigh: '💎' };
+            return (
+              <>
+                <span className="text-[var(--text-secondary)] text-[10px]">·</span>
+                <div className="flex items-center gap-0.5">
+                  {efforts.map((e: string) => (
+                    <button
+                      key={e}
+                      onClick={() => {
+                        const next = e === current ? null : e;
+                        updateTab(activeTabId, (tab) => ({ ...tab, reasoningEffort: next }));
+                        const panelIds = tabs.find(t => t.id === activeTabId)?.panels.map(p => p.id) ?? [];
+                        window.modelAPI?.setReasoningForPanels(panelIds, next);
+                      }}
+                      className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
+                        e === current
+                          ? 'bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] font-bold'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]'
+                      }`}
+                      title={`Reasoning: ${labels[e] || e}${e === (modelInfo?.defaultReasoningEffort) ? ' (default)' : ''}`}
+                    >
+                      {icons[e] || '🧠'} {labels[e] || e}
+                    </button>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
           <span className="text-[var(--border-color)]">|</span>
           <div className="relative">
             <button

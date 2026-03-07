@@ -77,13 +77,16 @@ interface UtilAPI {
   openCopilotShell(dir: string): void;
 }
 
+type ModelInfoData = { id: string; name: string; contextWindow: number; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string };
+
 interface ModelAPI {
   get(): Promise<string>;
   set(model: string): Promise<void>;
   setForPanels(panelIds: string[], model: string): Promise<void>;
-  list(): Promise<{ id: string; name: string; contextWindow: number }[]>;
-  listForProfile(profileId: string): Promise<{ id: string; name: string; contextWindow: number }[]>;
-  refresh(): Promise<{ id: string; name: string; contextWindow: number }[]>;
+  list(): Promise<ModelInfoData[]>;
+  listForProfile(profileId: string): Promise<ModelInfoData[]>;
+  refresh(): Promise<ModelInfoData[]>;
+  setReasoningForPanels(panelIds: string[], effort: string | null): Promise<void>;
 }
 
 interface McpAPI {
@@ -193,6 +196,8 @@ interface SchedulerAPI {
 }
 
 declare global {
+  type ModelInfoData = { id: string; name: string; contextWindow: number; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string };
+
   interface Window {
     copilotAPI: CopilotAPI;
     statsAPI: StatsAPI;

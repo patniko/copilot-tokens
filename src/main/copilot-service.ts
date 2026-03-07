@@ -16,6 +16,14 @@ type CustomAgentConfig = import('@github/copilot-sdk').CustomAgentConfig;
 
 // These types exist in the SDK but aren't re-exported from the index
 type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+
+export interface ModelInfoResult {
+  id: string;
+  name: string;
+  contextWindow: number;
+  supportedReasoningEfforts?: ReasoningEffort[];
+  defaultReasoningEffort?: ReasoningEffort;
+}
 interface UserInputRequest {
   question: string;
   choices?: string[];
@@ -366,6 +374,8 @@ export class CopilotService {
   private panelProfiles = new Map<string, string>();
   // Per-panel model overrides (panelId → modelId). Falls back to profile model → global model.
   private panelModels = new Map<string, string>();
+  // Per-panel reasoning effort overrides
+  private panelReasoningEffort = new Map<string, ReasoningEffort | null>();
 
   // Permission handler set by the IPC layer
   // Returns 'allow' (one-time), 'deny', or 'always' (persist rule)
@@ -479,13 +489,19 @@ export class CopilotService {
   }
 
   /** Set model for specific panels only (tab-scoped). Only recycles those panels' sessions. */
-  setModelForPanels(panelIds: string[], model: string): void {
+  /** Set model for specific panels only (tab-scoped). Uses session.setModel() for live switching. */
+  async setModelForPanels(panelIds: string[], model: string): Promise<void> {
     for (const pid of panelIds) {
       this.panelModels.set(pid, model);
       const session = this.sessions.get(pid);
       if (session) {
-        session.disconnect().catch(() => {});
-        this.sessions.delete(pid);
+        try {
+          await session.setModel(model);
+        } catch {
+          // Fall back to session recycling if setModel not supported
+          session.disconnect().catch(() => {});
+          this.sessions.delete(pid);
+        }
       }
     }
   }
@@ -502,8 +518,25 @@ export class CopilotService {
     }
   }
 
+  /** Set reasoning effort for specific panels (tab-scoped). Recycles sessions to apply. */
+  setReasoningForPanels(panelIds: string[], effort: ReasoningEffort | null): void {
+    for (const pid of panelIds) {
+      if (effort === null) {
+        this.panelReasoningEffort.delete(pid);
+      } else {
+        this.panelReasoningEffort.set(pid, effort);
+      }
+      // Must recycle session — reasoning effort is set at session creation time
+      const session = this.sessions.get(pid);
+      if (session) {
+        session.disconnect().catch(() => {});
+        this.sessions.delete(pid);
+      }
+    }
+  }
+
   /** List models for a specific profile (returns enabledModels for BYOK, or CLI models). */
-  async listModelsForProfile(profileId: string): Promise<{ id: string; name: string; contextWindow: number }[]> {
+  async listModelsForProfile(profileId: string): Promise<ModelInfoResult[]> {
     const profile = getProfile(profileId) ?? getActiveProfile();
     if (profile.enabledModels?.length) {
       return profile.enabledModels.map(id => ({ id, name: id, contextWindow: 0 }));
@@ -514,6 +547,8 @@ export class CopilotService {
       id: m.id,
       name: m.name,
       contextWindow: m.capabilities?.limits?.max_context_window_tokens ?? 0,
+      supportedReasoningEfforts: m.supportedReasoningEfforts as ReasoningEffort[] | undefined,
+      defaultReasoningEffort: m.defaultReasoningEffort as ReasoningEffort | undefined,
     }));
   }
 
@@ -638,7 +673,7 @@ export class CopilotService {
     }
   }
 
-  async listModels(): Promise<{ id: string; name: string; contextWindow: number }[]> {
+  async listModels(): Promise<ModelInfoResult[]> {
     // If active profile is BYOK with curated enabledModels, return those instead of CLI models
     const profile = getActiveProfile();
     if (profile.enabledModels?.length) {
@@ -650,10 +685,12 @@ export class CopilotService {
       id: m.id,
       name: m.name,
       contextWindow: m.capabilities?.limits?.max_context_window_tokens ?? 0,
+      supportedReasoningEfforts: m.supportedReasoningEfforts as ReasoningEffort[] | undefined,
+      defaultReasoningEffort: m.defaultReasoningEffort as ReasoningEffort | undefined,
     }));
   }
 
-  async refreshModels(): Promise<{ id: string; name: string; contextWindow: number }[]> {
+  async refreshModels(): Promise<ModelInfoResult[]> {
     await this.ensureStarted();
     // Clear SDK's internal model cache to force a fresh fetch
     (this.client as unknown as { modelsCache: unknown }).modelsCache = null;
@@ -775,8 +812,9 @@ export class CopilotService {
       if (features.askUser && this.userInputCallback) {
         opts.onUserInputRequest = this.userInputCallback;
       }
-      // Reasoning effort — only if the selected model supports it
-      const effort = this.getReasoningEffort();
+      // Reasoning effort — per-panel override → global setting. Only if the selected model supports it.
+      const panelEffort = this.panelReasoningEffort.get(panelId);
+      const effort = panelEffort !== undefined ? panelEffort : this.getReasoningEffort();
       if (features.reasoning && effort) {
         try {
           const models = await this.client!.listModels();
@@ -870,6 +908,7 @@ export class CopilotService {
     this.panelExcludedTools.delete(panelId);
     this.panelProfiles.delete(panelId);
     this.panelModels.delete(panelId);
+    this.panelReasoningEffort.delete(panelId);
   }
 
   /** Return the names of all custom (native/delegate) tools that can be toggled. */

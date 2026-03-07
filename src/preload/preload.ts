@@ -243,14 +243,17 @@ contextBridge.exposeInMainWorld('modelAPI', {
   setForPanels(panelIds: string[], model: string): Promise<void> {
     return ipcRenderer.invoke('model:setForPanels', panelIds, model);
   },
-  list(): Promise<{ id: string; name: string; contextWindow: number }[]> {
+  list(): Promise<{ id: string; name: string; contextWindow: number; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string }[]> {
     return ipcRenderer.invoke('model:list');
   },
-  listForProfile(profileId: string): Promise<{ id: string; name: string; contextWindow: number }[]> {
+  listForProfile(profileId: string): Promise<{ id: string; name: string; contextWindow: number; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string }[]> {
     return ipcRenderer.invoke('model:listForProfile', profileId);
   },
-  refresh(): Promise<{ id: string; name: string; contextWindow: number }[]> {
+  refresh(): Promise<{ id: string; name: string; contextWindow: number; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string }[]> {
     return ipcRenderer.invoke('model:refresh');
+  },
+  setReasoningForPanels(panelIds: string[], effort: string | null): Promise<void> {
+    return ipcRenderer.invoke('reasoning:setForPanels', panelIds, effort);
   },
 });
 

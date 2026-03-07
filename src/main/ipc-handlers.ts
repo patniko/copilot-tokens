@@ -599,8 +599,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     copilot.setModel(model);
   });
 
-  ipcMain.handle('model:setForPanels', (_event, panelIds: string[], model: string) => {
-    copilot.setModelForPanels(panelIds, model);
+  ipcMain.handle('model:setForPanels', async (_event, panelIds: string[], model: string) => {
+    await copilot.setModelForPanels(panelIds, model);
     // Persist as default for future sessions
     stats.setModel(model);
   });
@@ -615,6 +615,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('model:refresh', async () => {
     return copilot.refreshModels();
+  });
+
+  ipcMain.handle('reasoning:setForPanels', (_event, panelIds: string[], effort: string | null) => {
+    copilot.setReasoningForPanels(panelIds, effort as import('./copilot-service').ModelInfoResult['defaultReasoningEffort'] ?? null);
   });
 
   // ── Settings ──
