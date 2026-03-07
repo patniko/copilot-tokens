@@ -320,15 +320,56 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
         )}
       </AnimatePresence>
 
-      <div className="flex items-center gap-3">
-        {/* Attach button */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="px-2 py-2.5 text-[var(--text-secondary)] hover:text-[var(--accent-purple)] transition-colors cursor-pointer text-lg shrink-0"
-          title="Attach image"
-        >
-          📎
-        </button>
+      <div className="relative">
+        {/* Waveform overlay when listening */}
+        <AnimatePresence>
+          {voice.isListening && (
+            <motion.div
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl border border-[var(--accent-purple)] bg-[var(--bg-secondary)]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* Waveform bars */}
+              <div className="flex items-center justify-center gap-[2px] h-8 px-4 w-full">
+                {voice.audioLevels.map((level, i) => (
+                  <div
+                    key={i}
+                    className="w-[3px] rounded-full bg-[var(--accent-purple)]"
+                    style={{
+                      height: `${Math.max(3, level * 28)}px`,
+                      opacity: 0.4 + level * 0.6,
+                      transition: 'height 80ms ease-out, opacity 80ms ease-out',
+                    }}
+                  />
+                ))}
+              </div>
+              {/* Streaming transcript */}
+              {(voice.finalTranscript || voice.interimTranscript) && (
+                <p className="text-xs text-[var(--text-secondary)] mt-1 px-4 truncate max-w-full">
+                  <span className="text-[var(--text-primary)]">{voice.finalTranscript}</span>
+                  {voice.interimTranscript && (
+                    <span className="text-[var(--text-secondary)] italic">{voice.interimTranscript}</span>
+                  )}
+                </p>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <textarea
+          ref={textareaRef}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          placeholder={attachments.length > 0 ? 'Add a message or press Enter to send…' : isGenerating ? 'Type to steer or queue next message…' : 'Enter your prompt…'}
+          rows={1}
+          className="w-full bg-transparent outline-none text-[var(--text-primary)] placeholder-[var(--text-secondary)] resize-none rounded-xl border border-[var(--border-color)] pl-11 pr-20 py-3 focus:border-[var(--accent-purple)] focus:shadow-[0_0_8px_var(--accent-purple)] transition-shadow"
+          style={{ lineHeight: `${LINE_HEIGHT}px` }}
+        />
+
         <input
           ref={fileInputRef}
           type="file"
@@ -341,61 +382,63 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
           }}
         />
 
-        <div className="relative flex-1">
-          {/* Waveform overlay when listening */}
-          <AnimatePresence>
-            {voice.isListening && (
-              <motion.div
-                className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-lg border border-[var(--accent-purple)] bg-[var(--bg-secondary)]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                {/* Waveform bars */}
-                <div className="flex items-center justify-center gap-[2px] h-8 px-4 w-full">
-                  {voice.audioLevels.map((level, i) => (
-                    <div
-                      key={i}
-                      className="w-[3px] rounded-full bg-[var(--accent-purple)]"
-                      style={{
-                        height: `${Math.max(3, level * 28)}px`,
-                        opacity: 0.4 + level * 0.6,
-                        transition: 'height 80ms ease-out, opacity 80ms ease-out',
-                      }}
-                    />
-                  ))}
+        {/* Attach button — bottom left inside textarea */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="absolute left-3 bottom-2.5 z-20 flex items-center justify-center w-7 h-7 rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-purple)] transition-colors cursor-pointer"
+          title="Attach image"
+        >
+          📎
+        </button>
+
+        {/* Right-side buttons — bottom right inside textarea */}
+        <div className="absolute right-2.5 bottom-2 z-20 flex items-center gap-1">
+          {/* Session menu (⋯) */}
+          <div className="relative">
+            <button
+              onClick={() => setSendMenuOpen(!sendMenuOpen)}
+              className="flex items-center justify-center w-7 h-7 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer opacity-60 hover:opacity-100"
+              title="Session actions"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+            </button>
+            {sendMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setSendMenuOpen(false)} />
+                <div className="absolute bottom-full right-0 mb-2 z-50 w-44 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl overflow-hidden">
+                  <button
+                    onClick={() => { setSendMenuOpen(false); onNewSession?.(); }}
+                    className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
+                  >
+                    <span className="text-[var(--text-secondary)]">+</span> New Session
+                  </button>
+                  <button
+                    onClick={() => { setSendMenuOpen(false); onLoadSession?.(); }}
+                    className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="text-[var(--text-secondary)]"><path d="M1.5 1.5v13h13v-13h-13zM0 1a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H1a1 1 0 01-1-1V1zm4.5 2.5h7v1h-7v-1zm0 3h7v1h-7v-1zm0 3h4v1h-4v-1z"/></svg>
+                    Load Session
+                  </button>
+                  <button
+                    onClick={() => { setSendMenuOpen(false); onSplitSession?.(); }}
+                    className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-[var(--text-secondary)]">
+                      <rect x="1" y="2" width="14" height="12" rx="1" />
+                      <line x1="8" y1="2" x2="8" y2="14" />
+                    </svg>
+                    Split Session
+                  </button>
                 </div>
-                {/* Streaming transcript */}
-                {(voice.finalTranscript || voice.interimTranscript) && (
-                  <p className="text-xs text-[var(--text-secondary)] mt-1 px-4 truncate max-w-full">
-                    <span className="text-[var(--text-primary)]">{voice.finalTranscript}</span>
-                    {voice.interimTranscript && (
-                      <span className="text-[var(--text-secondary)] italic">{voice.interimTranscript}</span>
-                    )}
-                  </p>
-                )}
-              </motion.div>
+              </>
             )}
-          </AnimatePresence>
+          </div>
 
-          <textarea
-            ref={textareaRef}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            placeholder={attachments.length > 0 ? 'Add a message or press Enter to send…' : isGenerating ? 'Type to steer or queue next message…' : 'Enter your prompt…'}
-            rows={1}
-            className="w-full bg-transparent outline-none text-[var(--text-primary)] placeholder-[var(--text-secondary)] resize-none rounded-lg border border-[var(--border-color)] px-4 py-3 pr-10 focus:border-[var(--accent-purple)] focus:shadow-[0_0_8px_var(--accent-purple)] transition-shadow"
-            style={{ lineHeight: `${LINE_HEIGHT}px` }}
-          />
-
-          {/* Mic / Stop button overlay */}
+          {/* Mic button */}
           {voice.isSupported && (
             <button
               onClick={() => voice.isListening ? voice.stop() : voice.start()}
-              className={`absolute right-2.5 bottom-2.5 z-20 flex items-center justify-center w-7 h-7 rounded-full transition-all cursor-pointer ${
+              className={`flex items-center justify-center w-7 h-7 rounded-full transition-all cursor-pointer ${
                 voice.isListening
                   ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25'
                   : 'text-[var(--text-secondary)] hover:text-[var(--accent-purple)] opacity-50 hover:opacity-100'
@@ -403,12 +446,10 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
               title={voice.isListening ? 'Stop recording' : 'Voice input'}
             >
               {voice.isListening ? (
-                /* Stop icon */
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
                   <rect x="1" y="1" width="10" height="10" rx="1.5" />
                 </svg>
               ) : (
-                /* Microphone icon */
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="9" y="1" width="6" height="12" rx="3" />
                   <path d="M5 10a7 7 0 0 0 14 0" />
@@ -417,77 +458,40 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
               )}
             </button>
           )}
-        </div>
 
-        <AnimatePresence mode="wait">
-          {isGenerating ? (
-            <motion.button
-              key="stop"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.15 }}
-              onClick={handleAbort}
-              className="px-4 py-3 bg-red-600 text-white font-bold rounded-lg text-sm whitespace-nowrap cursor-pointer flex items-center shrink-0"
-            >
-              ⏹ STOP
-            </motion.button>
-          ) : (
-            <motion.div
-              key="send-group"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.15 }}
-              className="relative flex items-center shrink-0"
-            >
-              <button
+          {/* Send / Stop button */}
+          <AnimatePresence mode="wait">
+            {isGenerating ? (
+              <motion.button
+                key="stop"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.15 }}
+                onClick={handleAbort}
+                className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-600 text-white cursor-pointer"
+                title="Stop generating"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                  <rect x="1" y="1" width="10" height="10" rx="1.5" />
+                </svg>
+              </motion.button>
+            ) : (
+              <motion.button
+                key="send"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.15 }}
                 onClick={handleSend}
-                className="px-3 py-3 bg-[var(--accent-gold)] text-black font-bold rounded-l-lg cursor-pointer flex items-center justify-center"
+                className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--accent-gold)] text-black cursor-pointer"
+                title="Send (Enter)"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              </button>
-              <div className="w-px bg-black/20 self-stretch" />
-              <button
-                onClick={() => setSendMenuOpen(!sendMenuOpen)}
-                className="px-1.5 py-3 bg-[var(--accent-gold)] text-black font-bold rounded-r-lg cursor-pointer flex items-center justify-center hover:bg-[var(--accent-gold)]/80 transition-colors"
-              >
-                <svg width="10" height="10" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${sendMenuOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
-              </button>
-
-              {sendMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setSendMenuOpen(false)} />
-                  <div className="absolute bottom-full right-0 mb-2 z-50 w-44 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl overflow-hidden">
-                    <button
-                      onClick={() => { setSendMenuOpen(false); onNewSession?.(); }}
-                      className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
-                    >
-                      <span className="text-[var(--text-secondary)]">+</span> New Session
-                    </button>
-                    <button
-                      onClick={() => { setSendMenuOpen(false); onLoadSession?.(); }}
-                      className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="text-[var(--text-secondary)]"><path d="M1.5 1.5v13h13v-13h-13zM0 1a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H1a1 1 0 01-1-1V1zm4.5 2.5h7v1h-7v-1zm0 3h7v1h-7v-1zm0 3h4v1h-4v-1z"/></svg>
-                      Load Session
-                    </button>
-                    <button
-                      onClick={() => { setSendMenuOpen(false); onSplitSession?.(); }}
-                      className="w-full text-left px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer flex items-center gap-2"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-[var(--text-secondary)]">
-                        <rect x="1" y="2" width="14" height="12" rx="1" />
-                        <line x1="8" y1="2" x2="8" y2="14" />
-                      </svg>
-                      Split Session
-                    </button>
-                  </div>
-                </>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );
