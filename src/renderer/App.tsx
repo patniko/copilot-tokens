@@ -1033,29 +1033,75 @@ export default function App() {
             >
               {modelsLoading ? '⏳ Loading models…' :
                modelsError ? '⚠️ Models unavailable — click to retry' :
-               <>🧠 {availableModels.find(m => m.id === currentModel)?.name || currentModel}</>}
+               (() => {
+                 const mi = availableModels.find(m => m.id === currentModel);
+                 const effortLabels: Record<string, string> = { low: '🧊', medium: '🧠', high: '🔥', xhigh: '💎' };
+                 const eff = activeTab.reasoningEffort || mi?.defaultReasoningEffort;
+                 return <>🧠 {mi?.name || currentModel}{eff && mi?.supportedReasoningEfforts?.length ? <span className="text-[var(--accent-purple)] text-[10px] ml-0.5">{effortLabels[eff] || eff}</span> : null}</>;
+               })()}
               {!modelsLoading && !modelsError && <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>}
             </button>
             {modelDropdownOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setModelDropdownOpen(false)} />
-                <div className="absolute top-full left-0 mt-1 z-50 w-72 max-h-80 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
-                  {availableModels.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => handleModelSwitch(m.id)}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                        m.id === currentModel
-                          ? 'bg-[var(--accent-purple)]/15 text-[var(--accent-purple)]'
-                          : 'text-[var(--text-primary)] hover:bg-[var(--bg-primary)]'
-                      }`}
-                    >
-                      <span className="truncate">{m.name}</span>
-                      <span className="text-[var(--text-secondary)] shrink-0">
-                        {m.contextWindow ? `${Math.round(m.contextWindow / 1000)}K` : ''}
-                      </span>
-                    </button>
-                  ))}
+                <div className="absolute top-full left-0 mt-1 z-50 w-80 max-h-96 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
+                  {availableModels.map((m) => {
+                    const isSelected = m.id === currentModel;
+                    const efforts = m.supportedReasoningEfforts;
+                    const hasReasoning = efforts && efforts.length > 0;
+                    const currentEffort = activeTab.reasoningEffort || m.defaultReasoningEffort || null;
+                    const effortLabels: Record<string, string> = { low: 'Low', medium: 'Med', high: 'High', xhigh: 'Max' };
+                    const effortIcons: Record<string, string> = { low: '🧊', medium: '🧠', high: '🔥', xhigh: '💎' };
+                    return (
+                      <div
+                        key={m.id}
+                        className={`border-b border-[var(--border-color)] last:border-b-0 ${
+                          isSelected ? 'bg-[var(--accent-purple)]/10' : 'hover:bg-[var(--bg-primary)]'
+                        }`}
+                      >
+                        <button
+                          onClick={() => handleModelSwitch(m.id)}
+                          className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                            isSelected ? 'text-[var(--accent-purple)]' : 'text-[var(--text-primary)]'
+                          }`}
+                        >
+                          <span className="truncate">{isSelected ? '✓ ' : ''}{m.name}</span>
+                          <span className="text-[var(--text-secondary)] shrink-0">
+                            {m.contextWindow ? `${Math.round(m.contextWindow / 1000)}K` : ''}
+                          </span>
+                        </button>
+                        {hasReasoning && isSelected && (
+                          <div className="flex items-center gap-1 px-3 pb-2 -mt-1">
+                            <span className="text-[10px] text-[var(--text-secondary)] mr-1">Thinking:</span>
+                            {efforts.map((e: string) => {
+                              const isActive = e === currentEffort;
+                              const isDefault = e === m.defaultReasoningEffort;
+                              return (
+                                <button
+                                  key={e}
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    const next = e === activeTab.reasoningEffort ? null : e;
+                                    updateTab(activeTabId, (tab) => ({ ...tab, reasoningEffort: next }));
+                                    const panelIds = tabs.find(t => t.id === activeTabId)?.panels.map(p => p.id) ?? [];
+                                    window.modelAPI?.setReasoningForPanels(panelIds, next);
+                                  }}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
+                                    isActive
+                                      ? 'bg-[var(--accent-purple)]/25 text-[var(--accent-purple)] font-bold'
+                                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]'
+                                  }`}
+                                  title={`${effortLabels[e] || e}${isDefault ? ' (default)' : ''}`}
+                                >
+                                  {effortIcons[e] || '🧠'} {effortLabels[e] || e}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   {availableModels.length === 0 && (
                     <div className="px-3 py-2 text-xs text-[var(--text-secondary)]">Loading…</div>
                   )}
@@ -1063,41 +1109,6 @@ export default function App() {
               </>
             )}
           </div>
-          {/* Reasoning Effort (shown only for models that support it) */}
-          {(() => {
-            const modelInfo = availableModels.find(m => m.id === currentModel);
-            const efforts = modelInfo?.supportedReasoningEfforts;
-            if (!efforts?.length) return null;
-            const current = activeTab.reasoningEffort || modelInfo?.defaultReasoningEffort || null;
-            const labels: Record<string, string> = { low: 'Low', medium: 'Med', high: 'High', xhigh: 'Max' };
-            const icons: Record<string, string> = { low: '🧊', medium: '🧠', high: '🔥', xhigh: '💎' };
-            return (
-              <>
-                <span className="text-[var(--text-secondary)] text-[10px]">·</span>
-                <div className="flex items-center gap-0.5">
-                  {efforts.map((e: string) => (
-                    <button
-                      key={e}
-                      onClick={() => {
-                        const next = e === current ? null : e;
-                        updateTab(activeTabId, (tab) => ({ ...tab, reasoningEffort: next }));
-                        const panelIds = tabs.find(t => t.id === activeTabId)?.panels.map(p => p.id) ?? [];
-                        window.modelAPI?.setReasoningForPanels(panelIds, next);
-                      }}
-                      className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
-                        e === current
-                          ? 'bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] font-bold'
-                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]'
-                      }`}
-                      title={`Reasoning: ${labels[e] || e}${e === (modelInfo?.defaultReasoningEffort) ? ' (default)' : ''}`}
-                    >
-                      {icons[e] || '🧠'} {labels[e] || e}
-                    </button>
-                  ))}
-                </div>
-              </>
-            );
-          })()}
           <span className="text-[var(--border-color)]">|</span>
           <div className="relative">
             <button
