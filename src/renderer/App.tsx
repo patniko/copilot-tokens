@@ -1049,55 +1049,67 @@ export default function App() {
                     const isSelected = m.id === currentModel;
                     const efforts = m.supportedReasoningEfforts;
                     const hasReasoning = efforts && efforts.length > 0;
-                    const currentEffort = activeTab.reasoningEffort || m.defaultReasoningEffort || null;
+                    const activeEffort = isSelected ? (activeTab.reasoningEffort || m.defaultReasoningEffort || null) : (m.defaultReasoningEffort || null);
                     const effortLabels: Record<string, string> = { low: 'Low', medium: 'Med', high: 'High', xhigh: 'Max' };
                     const effortIcons: Record<string, string> = { low: '🧊', medium: '🧠', high: '🔥', xhigh: '💎' };
                     return (
                       <div
                         key={m.id}
                         className={`border-b border-[var(--border-color)] last:border-b-0 ${
-                          isSelected ? 'bg-[var(--accent-purple)]/10' : 'hover:bg-[var(--bg-primary)]'
+                          isSelected ? 'bg-[var(--accent-purple)]/10' : ''
                         }`}
                       >
-                        <button
-                          onClick={() => handleModelSwitch(m.id)}
-                          className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                            isSelected ? 'text-[var(--accent-purple)]' : 'text-[var(--text-primary)]'
-                          }`}
-                        >
-                          <span className="truncate">{isSelected ? '✓ ' : ''}{m.name}</span>
-                          <span className="text-[var(--text-secondary)] shrink-0">
-                            {m.contextWindow ? `${Math.round(m.contextWindow / 1000)}K` : ''}
-                          </span>
-                        </button>
-                        {hasReasoning && isSelected && (
-                          <div className="flex items-center gap-1 px-3 pb-2 -mt-1">
-                            <span className="text-[10px] text-[var(--text-secondary)] mr-1">Thinking:</span>
-                            {efforts.map((e: string) => {
-                              const isActive = e === currentEffort;
-                              const isDefault = e === m.defaultReasoningEffort;
-                              return (
-                                <button
-                                  key={e}
-                                  onClick={(ev) => {
-                                    ev.stopPropagation();
-                                    const next = e === activeTab.reasoningEffort ? null : e;
-                                    updateTab(activeTabId, (tab) => ({ ...tab, reasoningEffort: next }));
-                                    const panelIds = tabs.find(t => t.id === activeTabId)?.panels.map(p => p.id) ?? [];
-                                    window.modelAPI?.setReasoningForPanels(panelIds, next);
-                                  }}
-                                  className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
-                                    isActive
-                                      ? 'bg-[var(--accent-purple)]/25 text-[var(--accent-purple)] font-bold'
-                                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]'
-                                  }`}
-                                  title={`${effortLabels[e] || e}${isDefault ? ' (default)' : ''}`}
-                                >
-                                  {effortIcons[e] || '🧠'} {effortLabels[e] || e}
-                                </button>
-                              );
-                            })}
-                          </div>
+                        {hasReasoning ? (
+                          /* Reasoning model: show name row + effort pills. Clicking a pill selects model+effort. */
+                          <>
+                            <div className={`px-3 pt-2 pb-1 text-xs flex items-center justify-between gap-2 ${
+                              isSelected ? 'text-[var(--accent-purple)]' : 'text-[var(--text-primary)]'
+                            }`}>
+                              <span className="truncate font-medium">{isSelected ? '✓ ' : ''}{m.name}</span>
+                              <span className="text-[var(--text-secondary)] shrink-0 text-[10px]">
+                                {m.contextWindow ? `${Math.round(m.contextWindow / 1000)}K` : ''}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 px-3 pb-2">
+                              {efforts.map((e: string) => {
+                                const isActive = isSelected && e === activeEffort;
+                                return (
+                                  <button
+                                    key={e}
+                                    onClick={() => {
+                                      const effort = e === activeTab.reasoningEffort && isSelected ? null : e;
+                                      if (!isSelected) handleModelSwitch(m.id);
+                                      updateTab(activeTabId, (tab) => ({ ...tab, reasoningEffort: effort }));
+                                      const panelIds = tabs.find(t => t.id === activeTabId)?.panels.map(p => p.id) ?? [];
+                                      window.modelAPI?.setReasoningForPanels(panelIds, effort);
+                                      setModelDropdownOpen(false);
+                                    }}
+                                    className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
+                                      isActive
+                                        ? 'bg-[var(--accent-purple)]/25 text-[var(--accent-purple)] font-bold'
+                                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)]'
+                                    }`}
+                                    title={`${m.name} · ${effortLabels[e] || e} thinking${e === m.defaultReasoningEffort ? ' (default)' : ''}`}
+                                  >
+                                    {effortIcons[e] || '🧠'} {effortLabels[e] || e}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        ) : (
+                          /* Non-reasoning model: simple clickable row */
+                          <button
+                            onClick={() => handleModelSwitch(m.id)}
+                            className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                              isSelected ? 'text-[var(--accent-purple)]' : 'text-[var(--text-primary)] hover:bg-[var(--bg-primary)]'
+                            }`}
+                          >
+                            <span className="truncate">{isSelected ? '✓ ' : ''}{m.name}</span>
+                            <span className="text-[var(--text-secondary)] shrink-0">
+                              {m.contextWindow ? `${Math.round(m.contextWindow / 1000)}K` : ''}
+                            </span>
+                          </button>
                         )}
                       </div>
                     );
