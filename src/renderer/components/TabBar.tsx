@@ -11,6 +11,8 @@ export interface ProjectTab {
   panelCounter: number;
   yoloMode: boolean;
   disabledTools: string[];
+  profileId: string;
+  currentModel: string;
 }
 
 interface TabBarProps {

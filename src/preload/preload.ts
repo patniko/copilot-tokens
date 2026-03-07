@@ -240,8 +240,14 @@ contextBridge.exposeInMainWorld('modelAPI', {
   set(model: string): Promise<void> {
     return ipcRenderer.invoke('model:set', model);
   },
+  setForPanels(panelIds: string[], model: string): Promise<void> {
+    return ipcRenderer.invoke('model:setForPanels', panelIds, model);
+  },
   list(): Promise<{ id: string; name: string; contextWindow: number }[]> {
     return ipcRenderer.invoke('model:list');
+  },
+  listForProfile(profileId: string): Promise<{ id: string; name: string; contextWindow: number }[]> {
+    return ipcRenderer.invoke('model:listForProfile', profileId);
   },
   refresh(): Promise<{ id: string; name: string; contextWindow: number }[]> {
     return ipcRenderer.invoke('model:refresh');
@@ -284,6 +290,9 @@ contextBridge.exposeInMainWorld('profilesAPI', {
   },
   setPanelProfile(panelId: string, profileId: string): Promise<void> {
     return ipcRenderer.invoke('profiles:setPanelProfile', panelId, profileId);
+  },
+  setForPanels(panelIds: string[], profileId: string): Promise<void> {
+    return ipcRenderer.invoke('profiles:setForPanels', panelIds, profileId);
   },
   getPanelProfile(panelId: string): Promise<string | undefined> {
     return ipcRenderer.invoke('profiles:getPanelProfile', panelId);

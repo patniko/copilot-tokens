@@ -80,7 +80,9 @@ interface UtilAPI {
 interface ModelAPI {
   get(): Promise<string>;
   set(model: string): Promise<void>;
+  setForPanels(panelIds: string[], model: string): Promise<void>;
   list(): Promise<{ id: string; name: string; contextWindow: number }[]>;
+  listForProfile(profileId: string): Promise<{ id: string; name: string; contextWindow: number }[]>;
   refresh(): Promise<{ id: string; name: string; contextWindow: number }[]>;
 }
 
@@ -149,6 +151,7 @@ interface ProfilesAPI {
   getActive(): Promise<{ id: string; profile: ConnectionProfile }>;
   setActive(id: string): Promise<void>;
   setPanelProfile(panelId: string, profileId: string): Promise<void>;
+  setForPanels(panelIds: string[], profileId: string): Promise<void>;
   getPanelProfile(panelId: string): Promise<string | undefined>;
   onProfileChanged(callback: (data: { id: string; profile: ConnectionProfile }) => void): () => void;
   fetchModels(connection: ConnectionProfile['connection']): Promise<{ id: string; name: string; owned_by?: string }[]>;

@@ -362,6 +362,8 @@ export class CopilotService {
   private panelExcludedTools = new Map<string, string[]>();
   // Per-panel profile overrides (panelId → profileId). Falls back to global active profile.
   private panelProfiles = new Map<string, string>();
+  // Per-panel model overrides (panelId → modelId). Falls back to profile model → global model.
+  private panelModels = new Map<string, string>();
 
   // Permission handler set by the IPC layer
   // Returns 'allow' (one-time), 'deny', or 'always' (persist rule)
@@ -408,12 +410,10 @@ export class CopilotService {
   }
 
   setModel(model: string): void {
-    if (model && model !== this.model) {
+    if (model) {
       this.model = model;
-      for (const [id, session] of this.sessions) {
-        session.disconnect().catch(() => {});
-        this.sessions.delete(id);
-      }
+      // Only updates the global default for new sessions.
+      // Per-panel models are set via setModelForPanels() which recycles only those sessions.
     }
   }
 
@@ -460,6 +460,59 @@ export class CopilotService {
 
   getPanelProfile(panelId: string): string | undefined {
     return this.panelProfiles.get(panelId);
+  }
+
+  /** Set a per-panel model override. */
+  setPanelModel(panelId: string, model: string): void {
+    this.panelModels.set(panelId, model);
+    const session = this.sessions.get(panelId);
+    if (session) {
+      session.disconnect().catch(() => {});
+      this.sessions.delete(panelId);
+    }
+  }
+
+  getPanelModel(panelId: string): string | undefined {
+    return this.panelModels.get(panelId);
+  }
+
+  /** Set model for specific panels only (tab-scoped). Only recycles those panels' sessions. */
+  setModelForPanels(panelIds: string[], model: string): void {
+    for (const pid of panelIds) {
+      this.panelModels.set(pid, model);
+      const session = this.sessions.get(pid);
+      if (session) {
+        session.disconnect().catch(() => {});
+        this.sessions.delete(pid);
+      }
+    }
+  }
+
+  /** Set profile for specific panels only (tab-scoped). Only recycles those panels' sessions. */
+  setProfileForPanels(panelIds: string[], profileId: string): void {
+    for (const pid of panelIds) {
+      this.panelProfiles.set(pid, profileId);
+      const session = this.sessions.get(pid);
+      if (session) {
+        session.disconnect().catch(() => {});
+        this.sessions.delete(pid);
+      }
+    }
+  }
+
+  /** List models for a specific profile (returns enabledModels for BYOK, or CLI models). */
+  async listModelsForProfile(profileId: string): Promise<{ id: string; name: string; contextWindow: number }[]> {
+    const profile = getProfile(profileId) ?? getActiveProfile();
+    if (profile.enabledModels?.length) {
+      return profile.enabledModels.map(id => ({ id, name: id, contextWindow: 0 }));
+    }
+    await this.ensureStarted();
+    const models = await this.client!.listModels();
+    return models.map(m => ({
+      id: m.id,
+      name: m.name,
+      contextWindow: m.capabilities?.limits?.max_context_window_tokens ?? 0,
+    }));
   }
 
   /** Resolve the effective profile for a panel (panel override → global active). */
@@ -519,7 +572,7 @@ export class CopilotService {
     this.stop();
   }
 
-  /** Switch to a new active profile. Restarts client if CLI backend changed, otherwise just recycles sessions. */
+  /** Switch to a new active profile. Restarts client if CLI backend changed, otherwise recycles only sessions using the global profile. */
   async applyProfile(previousProfileId: string): Promise<void> {
     const prev = getProfile(previousProfileId);
     const next = getActiveProfile();
@@ -536,10 +589,12 @@ export class CopilotService {
     if (needsClientRestart) {
       await this.stop();
     } else {
-      // Just recycle sessions — provider/model/tools changed at session level
+      // Only recycle sessions that don't have their own panel-level profile override
       for (const [id, session] of this.sessions) {
-        session.disconnect().catch(() => {});
-        this.sessions.delete(id);
+        if (!this.panelProfiles.has(id)) {
+          session.disconnect().catch(() => {});
+          this.sessions.delete(id);
+        }
       }
     }
   }
@@ -669,7 +724,7 @@ export class CopilotService {
       const profileExcluded = profile.excludedTools ?? [];
       const allExcluded = [...new Set([...panelExcluded, ...profileExcluded])];
 
-      const effectiveModel = profile.model || this.model;
+      const effectiveModel = this.panelModels.get(panelId) || profile.model || this.model;
 
       const opts: Record<string, unknown> = {
         model: effectiveModel,
@@ -812,6 +867,7 @@ export class CopilotService {
     this.panelCwds.delete(panelId);
     this.panelExcludedTools.delete(panelId);
     this.panelProfiles.delete(panelId);
+    this.panelModels.delete(panelId);
   }
 
   /** Return the names of all custom (native/delegate) tools that can be toggled. */

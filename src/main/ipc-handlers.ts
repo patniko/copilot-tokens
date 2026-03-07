@@ -595,11 +595,22 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('model:set', (_event, model: string) => {
     stats.setModel(model);
+    // Only update the global default — doesn't destroy sessions (per-tab model handles that)
     copilot.setModel(model);
+  });
+
+  ipcMain.handle('model:setForPanels', (_event, panelIds: string[], model: string) => {
+    copilot.setModelForPanels(panelIds, model);
+    // Persist as default for future sessions
+    stats.setModel(model);
   });
 
   ipcMain.handle('model:list', async () => {
     return copilot.listModels();
+  });
+
+  ipcMain.handle('model:listForProfile', async (_event, profileId: string) => {
+    return copilot.listModelsForProfile(profileId);
   });
 
   ipcMain.handle('model:refresh', async () => {
@@ -656,6 +667,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('profiles:setPanelProfile', (_event, panelId: string, profileId: string) => {
     copilot.setPanelProfile(panelId, profileId);
+  });
+
+  ipcMain.handle('profiles:setForPanels', (_event, panelIds: string[], profileId: string) => {
+    copilot.setProfileForPanels(panelIds, profileId);
   });
 
   ipcMain.handle('profiles:getPanelProfile', (_event, panelId: string) => {

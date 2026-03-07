@@ -39,7 +39,8 @@ export default function App() {
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState<number | null>(null);
   const [inputTokens, setInputTokens] = useState(0);
-  const [currentModel, setCurrentModel] = useState('');
+  // Per-profile model cache: profileId → models[]
+  const modelCacheRef = useRef<Map<string, { id: string; name: string; contextWindow: number }[]>>(new Map());
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string; contextWindow: number }[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -70,8 +71,6 @@ export default function App() {
   // Scheduler
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const preTaskModelRef = useRef<string | null>(null);
-  const currentModelRef = useRef(currentModel);
-  currentModelRef.current = currentModel;
 
   // Fullscreen state (traffic lights hidden in fullscreen)
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -83,7 +82,7 @@ export default function App() {
   const tabCounter = useRef(0);
   const initialTabId = `tab-${tabCounter.current}`;
   const [tabs, setTabs] = useState<ProjectTab[]>([
-    { id: initialTabId, cwd: '', gitBranch: null, changedFiles: [], panels: [{ id: `${initialTabId}:main`, userPrompt: null, resetKey: 0 }], panelCounter: 0, yoloMode: false, disabledTools: [] },
+    { id: initialTabId, cwd: '', gitBranch: null, changedFiles: [], panels: [{ id: `${initialTabId}:main`, userPrompt: null, resetKey: 0 }], panelCounter: 0, yoloMode: false, disabledTools: [], profileId: 'default', currentModel: '' },
   ]);
   const [activeTabId, setActiveTabId] = useState(initialTabId);
   const [tabActivity, setTabActivity] = useState<Record<string, TabActivity>>({});
@@ -95,6 +94,8 @@ export default function App() {
   const changedFiles = activeTab.changedFiles;
   const panels = activeTab.panels;
   const yoloMode = activeTab.yoloMode;
+  const currentModel = activeTab.currentModel;
+  const activeProfileId = activeTab.profileId;
 
   // Update a specific tab's state
   const updateTab = useCallback((tabId: string, updater: (tab: ProjectTab) => ProjectTab) => {
@@ -187,6 +188,15 @@ export default function App() {
 
   const [mcpServers, setMcpServers] = useState<{ name: string; type: string; command: string }[]>([]);
   const [mcpDropdownOpen, setMcpDropdownOpen] = useState(false);
+  const [profilesList, setProfilesList] = useState<{ id: string; name: string; icon: string }[]>([]);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+
+  // Load profiles list
+  useEffect(() => {
+    window.profilesAPI?.list().then((profiles) => {
+      setProfilesList(profiles.map(p => ({ id: p.id, name: p.name, icon: p.icon })));
+    }).catch(() => {});
+  }, []);
 
   // Load CWD + git info + model + MCP servers on mount
   useEffect(() => {
@@ -209,23 +219,30 @@ export default function App() {
         }
       });
     }
+    // Load initial profile and models
     if (window.modelAPI) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setModelsLoading(true);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setModelsError(null);
-      window.modelAPI.list().then((models) => {
-        setAvailableModels(models);
-        // Set current model from backend preference, or first available
-        window.modelAPI!.get().then((saved) => {
+
+      // Get active profile for initial tab
+      const loadInitial = async () => {
+        try {
+          const { id: profileId } = await window.profilesAPI?.getActive() ?? { id: 'default' };
+          const models = await window.modelAPI!.list();
+          modelCacheRef.current.set(profileId, models);
+          setAvailableModels(models);
+
+          const saved = await window.modelAPI!.get();
           const match = models.find(m => m.id === saved);
-          setCurrentModel(match ? saved : models[0]?.id ?? '');
+          const resolvedModel = match ? saved : models[0]?.id ?? '';
+          updateTab(activeTabId, (tab) => ({ ...tab, profileId, currentModel: resolvedModel }));
           setModelsLoading(false);
-        });
-      }).catch((err) => {
-        setModelsError(err?.message || 'Failed to load models');
-        setModelsLoading(false);
-      });
+        } catch (err) {
+          setModelsError((err as Error)?.message || 'Failed to load models');
+          setModelsLoading(false);
+        }
+      };
+      loadInitial();
     }
     if (window.mcpAPI) {
       window.mcpAPI.list().then(setMcpServers).catch(() => {});
@@ -257,50 +274,122 @@ export default function App() {
   }, [cwd, activeTabId, updateTab]);
 
   const handleModelSwitch = useCallback((modelId: string) => {
-    setCurrentModel(modelId);
+    // Capture panel IDs before async state updates
+    const panelIds = tabs.find(t => t.id === activeTabId)?.panels.map(p => p.id) ?? [];
+    updateTab(activeTabId, (tab) => ({ ...tab, currentModel: modelId }));
     setModelDropdownOpen(false);
     setModelsError(null);
-    window.modelAPI?.set(modelId);
-  }, []);
+    // Only recycle this tab's panels' sessions
+    window.modelAPI?.setForPanels(panelIds, modelId);
+  }, [activeTabId, tabs, updateTab]);
 
   const retryLoadModels = useCallback(() => {
     if (!window.modelAPI) return;
     setModelsLoading(true);
     setModelsError(null);
-    window.modelAPI.list().then((models) => {
+    const profileId = activeTab.profileId;
+    window.modelAPI.listForProfile(profileId).then((models) => {
+      modelCacheRef.current.set(profileId, models);
       setAvailableModels(models);
-      window.modelAPI!.get().then((saved) => {
-        const match = models.find(m => m.id === saved);
-        setCurrentModel(match ? saved : models[0]?.id ?? '');
-        setModelsLoading(false);
-      });
+      const match = models.find(m => m.id === currentModel);
+      if (!match && models.length > 0) {
+        updateTab(activeTabId, (tab) => ({ ...tab, currentModel: models[0].id }));
+      }
+      setModelsLoading(false);
     }).catch((err) => {
       setModelsError(err?.message || 'Failed to load models');
       setModelsLoading(false);
     });
+  }, [activeTab.profileId, currentModel, activeTabId, updateTab]);
+
+  // Helper: load models for a profile and update cache + visible models
+  const loadModelsForProfile = useCallback(async (profileId: string): Promise<{ id: string; name: string; contextWindow: number }[]> => {
+    if (!window.modelAPI) return [];
+    try {
+      const models = await window.modelAPI.listForProfile(profileId);
+      modelCacheRef.current.set(profileId, models);
+      return models;
+    } catch {
+      return [];
+    }
   }, []);
 
-  // Refresh model list when active profile changes
+  // Helper: switch the active tab to a different profile
+  const handleTabProfileSwitch = useCallback(async (profileId: string) => {
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (!tab) return;
+
+    // Capture panel IDs and current model before any async operations
+    const panelIds = tab.panels.map(p => p.id);
+    const previousModel = tab.currentModel;
+    const tabId = tab.id;
+
+    setModelsLoading(true);
+    setModelsError(null);
+
+    // Update tab's profileId
+    updateTab(tabId, (t) => ({ ...t, profileId }));
+
+    // Also set as global default so new tabs/sessions default to it
+    window.profilesAPI?.setActive(profileId);
+
+    // Set profile for all panels in this tab (recycles their sessions)
+    window.profilesAPI?.setForPanels(panelIds, profileId);
+
+    // Load models for the new profile
+    try {
+      const models = await loadModelsForProfile(profileId);
+      setAvailableModels(models);
+
+      // Pick the profile's default model, or keep current if available, or fall back to first
+      const profile = (await window.profilesAPI?.list())?.find(p => p.id === profileId);
+      const preferred = profile?.model || previousModel;
+      const match = models.find(m => m.id === preferred);
+      const resolvedModel = match ? preferred : models[0]?.id ?? '';
+
+      updateTab(tabId, (t) => ({ ...t, currentModel: resolvedModel }));
+      if (resolvedModel) {
+        window.modelAPI?.setForPanels(panelIds, resolvedModel);
+      }
+      setModelsLoading(false);
+    } catch (err) {
+      setModelsError((err as Error)?.message || 'Failed to load models');
+      setModelsLoading(false);
+    }
+  }, [activeTabId, tabs, updateTab, loadModelsForProfile]);
+
+  // Refresh model list when global active profile changes (only affects tab if it matches)
   useEffect(() => {
-    const unsub = window.profilesAPI?.onProfileChanged(() => {
-      if (window.modelAPI) {
-        setModelsLoading(true);
-        setModelsError(null);
-        window.modelAPI.refresh().then((models) => {
-          setAvailableModels(models);
-          window.modelAPI!.get().then((saved) => {
-            const match = models.find(m => m.id === saved);
-            setCurrentModel(match ? saved : models[0]?.id ?? '');
+    const unsub = window.profilesAPI?.onProfileChanged(({ id: changedProfileId }) => {
+      // Invalidate cache for this profile
+      modelCacheRef.current.delete(changedProfileId);
+      // Also refresh the profiles list for the toolbar dropdown
+      window.profilesAPI?.list().then((profiles) => setProfilesList(profiles.map(p => ({ id: p.id, name: p.name, icon: p.icon })))).catch(() => {});
+      // If the active tab uses this profile, reload its models
+      setTabs(prevTabs => {
+        const active = prevTabs.find(t => t.id === activeTabId) ?? prevTabs[0];
+        if (active?.profileId === changedProfileId && window.modelAPI) {
+          const tabToUpdate = active.id;
+          setModelsLoading(true);
+          setModelsError(null);
+          window.modelAPI.listForProfile(changedProfileId).then((models) => {
+            modelCacheRef.current.set(changedProfileId, models);
+            setAvailableModels(models);
+            const match = models.find(m => m.id === active.currentModel);
+            if (!match && models.length > 0) {
+              updateTab(tabToUpdate, (tab) => ({ ...tab, currentModel: models[0].id }));
+            }
+            setModelsLoading(false);
+          }).catch((err) => {
+            setModelsError(err?.message || 'Failed to load models');
             setModelsLoading(false);
           });
-        }).catch((err) => {
-          setModelsError(err?.message || 'Failed to load models');
-          setModelsLoading(false);
-        });
-      }
+        }
+        return prevTabs;
+      });
     });
     return () => unsub?.();
-  }, []);
+  }, [activeTabId, updateTab]);
 
   const handleBrowseCwd = useCallback(async () => {
     if (!window.cwdAPI) return;
@@ -463,6 +552,16 @@ export default function App() {
       const newPanels = [...tab.panels, { id: newId, userPrompt: null, resetKey: 0 }];
       if (newPanels.length === 2) triggerBadge('badge-first-split');
       if (newPanels.length >= 3) triggerBadge('badge-3-panels');
+      // Set profile + model for the new panel in the main process
+      if (tab.profileId !== 'default') {
+        window.profilesAPI?.setPanelProfile(newId, tab.profileId);
+      }
+      if (tab.currentModel) {
+        window.modelAPI?.setForPanels([newId], tab.currentModel);
+      }
+      if (tab.disabledTools.length > 0) {
+        window.copilotAPI?.setExcludedTools(newId, tab.disabledTools);
+      }
       return { ...tab, panels: newPanels, panelCounter: next };
     });
   }, [triggerBadge, activeTabId, updateTab]);
@@ -558,6 +657,8 @@ export default function App() {
   const handleAddTab = useCallback(async () => {
     tabCounter.current += 1;
     const newTabId = `tab-${tabCounter.current}`;
+    // Clone settings from the active tab
+    const sourceTab = tabs.find(t => t.id === activeTabId) ?? tabs[0];
     const newTab: ProjectTab = {
       id: newTabId,
       cwd: '',
@@ -565,14 +666,35 @@ export default function App() {
       changedFiles: [],
       panels: [{ id: `${newTabId}:main`, userPrompt: null, resetKey: 0 }],
       panelCounter: 0,
-      yoloMode: false,
-      disabledTools: [],
+      yoloMode: sourceTab.yoloMode,
+      disabledTools: [...sourceTab.disabledTools],
+      profileId: sourceTab.profileId,
+      currentModel: sourceTab.currentModel,
     };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTabId);
+
+    // Set profile + model for the new tab's panel in the main process
+    const mainPanelId = `${newTabId}:main`;
+    if (newTab.profileId !== 'default') {
+      window.profilesAPI?.setPanelProfile(mainPanelId, newTab.profileId);
+    }
+    if (newTab.currentModel) {
+      window.modelAPI?.setForPanels([mainPanelId], newTab.currentModel);
+    }
+    if (newTab.disabledTools.length > 0) {
+      window.copilotAPI?.setExcludedTools(mainPanelId, newTab.disabledTools);
+    }
+
+    // Load models from cache for the new tab's profile (toolbar will show them)
+    const cached = modelCacheRef.current.get(newTab.profileId);
+    if (cached) {
+      setAvailableModels(cached);
+    }
+
     // Open directory picker for the new tab
     if (window.cwdAPI) {
-      const dir = await window.cwdAPI.browse([`${newTabId}:main`]);
+      const dir = await window.cwdAPI.browse([mainPanelId]);
       if (dir) {
         updateTab(newTabId, (tab) => ({ ...tab, cwd: dir }));
         window.cwdAPI.gitInfo(dir).then((info) => {
@@ -585,7 +707,7 @@ export default function App() {
         });
       }
     }
-  }, [updateTab]);
+  }, [updateTab, tabs, activeTabId]);
 
   const handleCloseTab = useCallback((tabId: string) => {
     setTabs(prev => {
@@ -618,6 +740,20 @@ export default function App() {
       window.copilotAPI?.setYoloMode(tab.yoloMode);
       // Sync CWD to stats for the active tab
       if (tab.cwd) window.cwdAPI?.set(tab.cwd, tab.panels.map(p => p.id));
+      // Update toolbar models from cache for this tab's profile
+      const cached = modelCacheRef.current.get(tab.profileId);
+      if (cached) {
+        setAvailableModels(cached);
+        setModelsError(null);
+      } else if (window.modelAPI) {
+        // Load models for this profile if not cached
+        setModelsLoading(true);
+        window.modelAPI.listForProfile(tab.profileId).then((models) => {
+          modelCacheRef.current.set(tab.profileId, models);
+          setAvailableModels(models);
+          setModelsLoading(false);
+        }).catch(() => setModelsLoading(false));
+      }
     }
   }, [tabs]);
 
@@ -629,8 +765,12 @@ export default function App() {
     return window.schedulerAPI.onTaskFired((task) => {
       const panelId = `${SCHEDULER_TAB_ID}:main`;
 
-      // Save the current model so we can restore it after the task completes
-      preTaskModelRef.current = currentModelRef.current;
+      // Save the current active tab's model so we can restore it after the task completes
+      setTabs(prev => {
+        const activeT = prev.find(t => t.id === activeTabId);
+        if (activeT) preTaskModelRef.current = activeT.currentModel;
+        return prev;
+      });
 
       setTabs(prev => {
         const existing = prev.find(t => t.id === SCHEDULER_TAB_ID);
@@ -641,6 +781,7 @@ export default function App() {
             ...t,
             cwd: task.cwd,
             yoloMode: task.yoloMode,
+            currentModel: task.model,
             panels: [{ id: panelId, userPrompt: null, resetKey: Date.now() }],
             panelCounter: 0,
           } : t);
@@ -655,6 +796,8 @@ export default function App() {
           panelCounter: 0,
           yoloMode: task.yoloMode,
           disabledTools: [],
+          profileId: 'default',
+          currentModel: task.model,
         };
         return [...prev, newTab];
       });
@@ -663,8 +806,7 @@ export default function App() {
       setActiveTabId(SCHEDULER_TAB_ID);
       window.copilotAPI?.setYoloMode(task.yoloMode);
       window.cwdAPI?.set(task.cwd, [panelId]);
-      window.modelAPI?.set(task.model);
-      setCurrentModel(task.model);
+      window.modelAPI?.setForPanels([panelId], task.model);
 
       // Wait for React to flush, then update git info and send the prompt
       setTimeout(() => {
@@ -702,8 +844,8 @@ export default function App() {
       if (preTaskModelRef.current) {
         const modelToRestore = preTaskModelRef.current;
         preTaskModelRef.current = null;
+        // Restore the previous active tab's model as the global default
         window.modelAPI?.set(modelToRestore);
-        setCurrentModel(modelToRestore);
       }
     }, schedulerPanelId);
   }, []);
@@ -717,6 +859,8 @@ export default function App() {
       const sourceCwd = sourceTab?.cwd ?? cwd;
       const sourceYolo = sourceTab?.yoloMode ?? false;
       const sourceDisabledTools = sourceTab?.disabledTools ?? [];
+      const sourceProfileId = sourceTab?.profileId ?? 'default';
+      const sourceModel = sourceTab?.currentModel ?? '';
 
       tabCounter.current += 1;
       const newTabId = `tab-${tabCounter.current}`;
@@ -732,14 +876,18 @@ export default function App() {
         panelCounter: 0,
         yoloMode: sourceYolo,
         disabledTools: sourceDisabledTools,
+        profileId: sourceProfileId,
+        currentModel: sourceModel,
       };
 
       setTabs(prev => [...prev, newTab]);
       // Don't switch focus — let the delegate run in background
 
-      // Set up CWD + YOLO + disabled tools for the new panel, then send prompt
+      // Set up CWD + YOLO + disabled tools + profile + model for the new panel
       if (sourceCwd) window.cwdAPI?.set(sourceCwd, [panelId]);
       if (sourceDisabledTools.length > 0) window.copilotAPI?.setExcludedTools(panelId, sourceDisabledTools);
+      if (sourceProfileId !== 'default') window.profilesAPI?.setPanelProfile(panelId, sourceProfileId);
+      if (sourceModel) window.modelAPI?.setForPanels([panelId], sourceModel);
 
       setTimeout(() => {
         if (!sessionStartRef.current) sessionStartRef.current = Date.now();
@@ -827,6 +975,47 @@ export default function App() {
             onSelectRecent={(dir) => refreshGitInfo(dir)}
             onBranchSwitch={() => refreshGitInfo(cwd)}
           />
+          <span className="text-[var(--border-color)]">|</span>
+          {/* Profile Switcher */}
+          <div className="relative">
+            <button
+              onClick={() => { if (profilesList.length <= 1) { setProfilesOpen(true); } else { setProfileDropdownOpen(!profileDropdownOpen); } }}
+              className="flex items-center gap-1 transition-colors cursor-pointer text-[var(--accent-gold)] hover:text-[var(--accent-purple)]"
+              title={`Profile: ${profilesList.find(p => p.id === activeProfileId)?.name ?? 'Default'}`}
+            >
+              <span>{profilesList.find(p => p.id === activeProfileId)?.icon ?? '🐙'}</span>
+              <span className="max-w-[80px] truncate">{profilesList.find(p => p.id === activeProfileId)?.name ?? 'Default'}</span>
+              {profilesList.length > 1 && <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${profileDropdownOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>}
+            </button>
+            {profileDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setProfileDropdownOpen(false)} />
+                <div className="absolute top-full left-0 mt-1 z-50 w-56 max-h-80 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
+                  {profilesList.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => { setProfileDropdownOpen(false); handleTabProfileSwitch(p.id); }}
+                      className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors cursor-pointer ${
+                        p.id === activeProfileId
+                          ? 'bg-[var(--accent-gold)]/15 text-[var(--accent-gold)]'
+                          : 'text-[var(--text-primary)] hover:bg-[var(--bg-primary)]'
+                      }`}
+                    >
+                      <span>{p.icon}</span>
+                      <span className="truncate">{p.name}</span>
+                      {p.id === activeProfileId && <span className="ml-auto text-[10px] opacity-60">✓</span>}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => { setProfileDropdownOpen(false); setProfilesOpen(true); }}
+                    className="w-full text-left px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--accent-gold)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer border-t border-[var(--border-color)]"
+                  >
+                    ⚙️ Manage Profiles…
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <span className="text-[var(--border-color)]">|</span>
           <div className="relative">
             <button
@@ -1118,9 +1307,9 @@ export default function App() {
           </section>
         </main>
         <AchievementsModal isOpen={achievementsOpen} onClose={() => setAchievementsOpen(false)} onReplaySession={(ts) => { setAchievementsOpen(false); setReplaySessionTimestamp(ts); }} initialTab={achievementsTab} />
-        <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onModelChange={setCurrentModel} />
+        <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onModelChange={(model) => { handleModelSwitch(model); }} />
         <PackStudio isOpen={packStudioOpen} onClose={() => setPackStudioOpen(false)} />
-        <ProfilesModal isOpen={profilesOpen} onClose={() => setProfilesOpen(false)} />
+        <ProfilesModal isOpen={profilesOpen} onClose={() => { setProfilesOpen(false); window.profilesAPI?.list().then((profiles) => setProfilesList(profiles.map(p => ({ id: p.id, name: p.name, icon: p.icon })))).catch(() => {}); }} />
         <SchedulerPanel
           isOpen={schedulerOpen}
           onClose={() => setSchedulerOpen(false)}
