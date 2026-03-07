@@ -1,0 +1,73 @@
+# Detect @github/copilot-sdk version changes and annotate PRs.
+name: SDK Version Check
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  check-sdk-version:
+    name: Check SDK Version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect SDK version change
+        id: sdk-version
+        run: |
+          # Get the SDK version from the PR branch
+          NEW_VERSION=$(node -p "require('./package-lock.json').packages['node_modules/@github/copilot-sdk']?.version || 'not-found'")
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          
+          # Get the SDK version from the base branch
+          git checkout "${{ github.event.pull_request.base.sha }}" -- package-lock.json 2>/dev/null || true
+          OLD_VERSION=$(node -p "require('./package-lock.json').packages['node_modules/@github/copilot-sdk']?.version || 'not-found'")
+          echo "old_version=$OLD_VERSION" >> "$GITHUB_OUTPUT"
+          
+          # Restore PR's package-lock.json
+          git checkout HEAD -- package-lock.json
+          
+          if [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "🔄 SDK version changed: $OLD_VERSION → $NEW_VERSION"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "✅ SDK version unchanged: $NEW_VERSION"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.sdk-version.outputs.changed == 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install and run contract tests
+        if: steps.sdk-version.outputs.changed == 'true'
+        run: |
+          npm ci
+          npx vitest run src/main/__tests__/sdk-contract.test.ts --reporter=verbose
+
+      - name: Annotate PR with SDK change
+        if: steps.sdk-version.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const old = '${{ steps.sdk-version.outputs.old_version }}';
+            const next = '${{ steps.sdk-version.outputs.new_version }}';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔄 SDK Version Change Detected\n\n` +
+                    `\`@github/copilot-sdk\` version changed: **${old}** → **${next}**\n\n` +
+                    `Contract tests have been run. Please review the results above to verify API compatibility.\n\n` +
+                    `### Checklist\n` +
+                    `- [ ] SDK contract tests pass\n` +
+                    `- [ ] CopilotService still works with new SDK\n` +
+                    `- [ ] No breaking changes in event types\n` +
+                    `- [ ] Update SDK version in contract test if intentional upgrade`,
+            });

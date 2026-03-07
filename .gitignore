@@ -6,3 +6,4 @@ out/
 capabilities-gap-report.html
 .DS_Store
 .DS_Store
+coverage/
