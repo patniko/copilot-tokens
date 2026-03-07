@@ -320,11 +320,11 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
         )}
       </AnimatePresence>
 
-      <div className="flex items-end gap-3">
+      <div className="flex items-stretch gap-3">
         {/* Attach button */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="px-2 py-2.5 text-[var(--text-secondary)] hover:text-[var(--accent-purple)] transition-colors cursor-pointer text-lg"
+          className="px-2 flex items-center text-[var(--text-secondary)] hover:text-[var(--accent-purple)] transition-colors cursor-pointer text-lg"
           title="Attach image"
         >
           📎
@@ -428,7 +428,7 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.15 }}
               onClick={handleAbort}
-              className="px-4 py-2.5 bg-red-600 text-white font-bold rounded-lg text-sm whitespace-nowrap cursor-pointer"
+              className="px-4 bg-red-600 text-white font-bold rounded-lg text-sm whitespace-nowrap cursor-pointer flex items-center"
             >
               ⏹ STOP
             </motion.button>
@@ -439,18 +439,18 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.15 }}
-              className="relative flex items-center"
+              className="relative flex items-stretch"
             >
               <button
                 onClick={handleSend}
-                className="px-3 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-l-lg cursor-pointer flex items-center justify-center self-stretch"
+                className="px-3 bg-[var(--accent-gold)] text-black font-bold rounded-l-lg cursor-pointer flex items-center justify-center"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>
-              <div className="w-px bg-black/20 self-stretch" />
+              <div className="w-px bg-black/20" />
               <button
                 onClick={() => setSendMenuOpen(!sendMenuOpen)}
-                className="px-1.5 py-2.5 bg-[var(--accent-gold)] text-black font-bold rounded-r-lg cursor-pointer flex items-center justify-center self-stretch hover:bg-[var(--accent-gold)]/80 transition-colors"
+                className="px-1.5 bg-[var(--accent-gold)] text-black font-bold rounded-r-lg cursor-pointer flex items-center justify-center hover:bg-[var(--accent-gold)]/80 transition-colors"
               >
                 <svg width="10" height="10" viewBox="0 0 8 8" fill="currentColor" className={`transition-transform ${sendMenuOpen ? 'rotate-180' : ''}`}><path d="M0 2l4 4 4-4z"/></svg>
               </button>
