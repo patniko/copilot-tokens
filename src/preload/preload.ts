@@ -81,6 +81,11 @@ contextBridge.exposeInMainWorld('copilotAPI', {
     ipcRenderer.on('copilot:delegateTab', listener);
     return () => ipcRenderer.removeListener('copilot:delegateTab', listener);
   },
+  onCelebrate(callback: (data: { message: string; emoji: string; effect: string; sound: string }) => void): () => void {
+    const listener = (_event: Electron.IpcRendererEvent, data: { message: string; emoji: string; effect: string; sound: string }) => callback(data);
+    ipcRenderer.on('copilot:celebrate', listener);
+    return () => ipcRenderer.removeListener('copilot:celebrate', listener);
+  },
 });
 
 contextBridge.exposeInMainWorld('statsAPI', {

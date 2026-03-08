@@ -420,6 +420,9 @@ export class CopilotService {
   // Delegate handler: fires when an agent wants to create a new tab
   private delegateCallback: ((data: { prompt: string; description?: string; sourcePanelId: string }) => void) | null = null;
 
+  // Celebrate handler: fires when an agent wants to trigger a celebration overlay
+  private celebrateCallback: ((data: { message: string; emoji: string; effect: string; sound: string }) => void) | null = null;
+
   private constructor() {}
 
   static getInstance(): CopilotService {
@@ -476,6 +479,10 @@ export class CopilotService {
 
   setDelegateHandler(handler: (data: { prompt: string; description?: string; sourcePanelId: string }) => void): void {
     this.delegateCallback = handler;
+  }
+
+  setCelebrateHandler(handler: (data: { message: string; emoji: string; effect: string; sound: string }) => void): void {
+    this.celebrateCallback = handler;
   }
 
   /** Set excluded tools for a panel and recycle its session. */
@@ -1137,6 +1144,41 @@ export class CopilotService {
             },
           }));
         }
+        // Celebrate tool — allows the agent to fire a celebration overlay
+        if (this.celebrateCallback) {
+          const celebrateCb = this.celebrateCallback;
+          tools.push(dt('celebrate', {
+            description: 'Fire a celebration animation in the app! Use this to celebrate accomplishments, completed tasks, milestones, or anything worth cheering about. Picks from 5 visual intensity levels and plays a sound.',
+            parameters: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', description: 'Short celebratory message to display (e.g. "Tests passing!", "Ship it! 🚀", "All bugs squashed!")' },
+                emoji: { type: 'string', description: 'Single emoji for the celebration (e.g. "🎉", "🚀", "✨", "🏆", "🔥")' },
+                effect: {
+                  type: 'string',
+                  enum: ['sparkle', 'banner', 'confetti', 'jackpot', 'mega'],
+                  description: 'Visual intensity: sparkle (subtle), banner (medium), confetti (big), jackpot (huge with screen effects), mega (maximum with screen shake)',
+                },
+                sound: {
+                  type: 'string',
+                  enum: ['milestone', 'jackpot', 'celebration100k', 'celebration500k'],
+                  description: 'Sound to play: milestone (quick chime), jackpot (slot machine bells), celebration100k (triumphant fanfare), celebration500k (epic orchestral)',
+                },
+              },
+              required: ['message'],
+            },
+            handler: async (args: unknown) => {
+              const { message, emoji, effect, sound } = args as { message: string; emoji?: string; effect?: string; sound?: string };
+              celebrateCb({
+                message,
+                emoji: emoji || '🎉',
+                effect: effect || 'confetti',
+                sound: sound || 'milestone',
+              });
+              return `Celebration fired: "${message}"`;
+            },
+          }));
+        }
         opts.tools = tools;
       }
       session = await this.client!.createSession(opts as unknown as Parameters<CopilotClientType['createSession']>[0]);
@@ -1165,6 +1207,7 @@ export class CopilotService {
     const tools = await buildNativeTools();
     const names = tools.map(t => t.name);
     if (this.delegateCallback) names.push('delegate_to_tab');
+    if (this.celebrateCallback) names.push('celebrate');
     return names;
   }
 

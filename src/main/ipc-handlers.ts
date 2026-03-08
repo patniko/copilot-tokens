@@ -133,6 +133,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     mainWindow.webContents.send('copilot:delegateTab', data);
   });
 
+  // --- Celebrate tool: agent can fire celebration overlays ---
+  copilot.setCelebrateHandler((data) => {
+    mainWindow.webContents.send('copilot:celebrate', data);
+  });
+
   // --- Per-panel tool toggling ---
   ipcMain.handle('copilot:setExcludedTools', async (_event, panelId: string, tools: string[]) => {
     copilot.setExcludedTools(panelId, tools);

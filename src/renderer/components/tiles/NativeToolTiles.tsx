@@ -154,3 +154,29 @@ export function SoundTile({ data, isRunning, success, error }: TileProps) {
     </div>
   );
 }
+
+/* ── CelebrateTile ───────────────────────────────────────── */
+
+export function CelebrateTile({ data, isRunning, success, error }: TileProps) {
+  const message = str(data.message ?? '');
+  const emoji = str(data.emoji ?? '🎉');
+  const effect = str(data.effect ?? 'confetti');
+  const borderColor = error ? 'var(--accent-red)' : 'var(--accent-gold, #FFD700)';
+
+  return (
+    <div className="glass-card w-full p-4 overflow-hidden" style={{ borderLeft: `4px solid ${borderColor}` }}>
+      <div className="flex items-center gap-2 mb-2 min-w-0">
+        <StatusIcon icon="🎊" isRunning={isRunning} success={success} error={error} />
+        <span className="text-xs font-medium text-[var(--text-secondary)]">Celebration</span>
+        <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,215,0,0.15)', color: 'var(--accent-gold, #FFD700)' }}>{effect}</span>
+      </div>
+      {message && (
+        <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+          {emoji} {message}
+        </div>
+      )}
+      {isRunning && !message && <div className="text-xs italic text-[var(--text-secondary)]">Celebrating…</div>}
+      <ErrorBlock error={error} />
+    </div>
+  );
+}

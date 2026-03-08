@@ -13,6 +13,7 @@ vi.mock('../components/tiles/NativeToolTiles', () => ({
   SystemInfoTile: () => null,
   OpenUrlTile: () => null,
   SoundTile: () => null,
+  CelebrateTile: () => null,
 }));
 
 import { registerBuiltinTiles } from './register-tiles';
@@ -40,6 +41,7 @@ describe('registerBuiltinTiles', () => {
       'system_info',
       'open_url',
       'play_sound',
+      'celebrate',
     ];
 
     for (const tool of expectedTools) {

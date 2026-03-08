@@ -36,6 +36,7 @@ const mockCopilot = {
   setPermissionHandler: vi.fn(),
   setUserInputHandler: vi.fn(),
   setDelegateHandler: vi.fn(),
+  setCelebrateHandler: vi.fn(),
   getFeatures: vi.fn().mockReturnValue({ streaming: true }),
   setFeatures: vi.fn(),
   getReasoningEffort: vi.fn().mockReturnValue(null),
