@@ -304,6 +304,18 @@ export type CliMode =
   | { type: 'installed' }
   | { type: 'remote'; url: string };
 
+export interface ServerModeConfig {
+  enabled: boolean;
+  port: number;
+}
+
+export interface ServerInfo {
+  enabled: boolean;
+  port: number;
+  state: 'disconnected' | 'connecting' | 'connected' | 'error';
+  externalSessionCount: number;
+}
+
 interface SettingsStoreSchema {
   systemPrompt: SystemPromptConfig;
   features: FeatureFlags;
@@ -313,6 +325,7 @@ interface SettingsStoreSchema {
   compactionThresholds: { background: number; bufferExhaustion: number };
   skillDirectories: string[];
   disabledSkills: string[];
+  serverMode: ServerModeConfig;
 }
 
 export interface FeatureFlags {
@@ -346,6 +359,7 @@ const settingsStore = new Store<SettingsStoreSchema>({
     compactionThresholds: { background: 0.80, bufferExhaustion: 0.95 },
     skillDirectories: [],
     disabledSkills: [],
+    serverMode: { enabled: false, port: 19900 },
   },
 });
 
@@ -377,6 +391,11 @@ export class CopilotService {
   private client: CopilotClientType | null = null;
   private sessions = new Map<string, CopilotSessionType>();
   private started = false;
+
+  // Server mode: track our own session IDs vs external ones
+  private ownSessionIds = new Set<string>();
+  private externalSessionCount = 0;
+  private lifecycleUnsub: (() => void) | null = null;
 
   private workingDirectory: string | undefined;
   // Per-panel CWD overrides (for multi-tab support)
@@ -660,6 +679,105 @@ export class CopilotService {
     this.stop();
   }
 
+  // ── Server Mode ──────────────────────────────────────────────────────
+
+  getServerModeConfig(): ServerModeConfig {
+    return settingsStore.get('serverMode');
+  }
+
+  getServerInfo(): ServerInfo {
+    const config = this.getServerModeConfig();
+    return {
+      enabled: config.enabled,
+      port: config.port,
+      state: this.client?.getState() ?? 'disconnected',
+      externalSessionCount: this.externalSessionCount,
+    };
+  }
+
+  /** Enable server mode: restart client on a fixed TCP port so external agents can connect. */
+  async enableServerMode(port = 19900): Promise<void> {
+    // Save session IDs for resumption after client restart
+    const sessionEntries = [...this.sessions.entries()].map(([panelId, session]) => ({
+      panelId,
+      sessionId: session.sessionId,
+    }));
+
+    // Tear down current client
+    for (const [, session] of this.sessions) {
+      await session.disconnect().catch(() => {});
+    }
+    this.sessions.clear();
+    this.ownSessionIds.clear();
+    this.externalSessionCount = 0;
+    if (this.lifecycleUnsub) {
+      this.lifecycleUnsub();
+      this.lifecycleUnsub = null;
+    }
+    if (this.started && this.client) {
+      await this.client.stop();
+    }
+    this.client = null;
+    this.started = false;
+
+    // Persist and restart with TCP
+    settingsStore.set('serverMode', { enabled: true, port });
+    await this.ensureStarted();
+
+    // Resume sessions so chat history is preserved
+    for (const { panelId, sessionId } of sessionEntries) {
+      try {
+        const opts = this.buildResumeOpts(panelId);
+        const resumed = await this.client!.resumeSession(sessionId, opts as Parameters<CopilotClientType['resumeSession']>[1]);
+        this.sessions.set(panelId, resumed);
+        this.ownSessionIds.add(resumed.sessionId);
+      } catch {
+        console.warn(`[CopilotService] Could not resume session ${sessionId} after server mode enable`);
+      }
+    }
+
+    console.log(`[CopilotService] Server mode enabled on port ${port}`);
+  }
+
+  /** Disable server mode: restart client in default stdio mode, resume sessions. */
+  async disableServerMode(): Promise<void> {
+    const sessionEntries = [...this.sessions.entries()].map(([panelId, session]) => ({
+      panelId,
+      sessionId: session.sessionId,
+    }));
+
+    for (const [, session] of this.sessions) {
+      await session.disconnect().catch(() => {});
+    }
+    this.sessions.clear();
+    this.ownSessionIds.clear();
+    this.externalSessionCount = 0;
+    if (this.lifecycleUnsub) {
+      this.lifecycleUnsub();
+      this.lifecycleUnsub = null;
+    }
+    if (this.started && this.client) {
+      await this.client.stop();
+    }
+    this.client = null;
+    this.started = false;
+
+    settingsStore.set('serverMode', { ...this.getServerModeConfig(), enabled: false });
+    await this.ensureStarted();
+
+    for (const { panelId, sessionId } of sessionEntries) {
+      try {
+        const opts = this.buildResumeOpts(panelId);
+        const resumed = await this.client!.resumeSession(sessionId, opts as Parameters<CopilotClientType['resumeSession']>[1]);
+        this.sessions.set(panelId, resumed);
+      } catch {
+        console.warn(`[CopilotService] Could not resume session ${sessionId} after server mode disable`);
+      }
+    }
+
+    console.log('[CopilotService] Server mode disabled, back to stdio');
+  }
+
   /** Switch to a new active profile. Restarts client if CLI backend changed, otherwise recycles only sessions using the global profile. */
   async applyProfile(previousProfileId: string): Promise<void> {
     const prev = getProfile(previousProfileId);
@@ -753,6 +871,14 @@ export class CopilotService {
       const { CopilotClient } = await loadSDK();
       const opts: Record<string, unknown> = { autoStart: false };
 
+      // Server mode: use TCP with a fixed port so external clients can connect
+      const serverConfig = this.getServerModeConfig();
+      if (serverConfig.enabled) {
+        opts.port = serverConfig.port;
+        opts.useStdio = false;
+        console.log(`[CopilotService] Server mode: starting runtime on TCP port ${serverConfig.port}`);
+      }
+
       // Derive CLI backend from active profile's connection type
       const profile = getActiveProfile();
       const conn = profile.connection;
@@ -797,8 +923,32 @@ export class CopilotService {
       }
 
       this.client = new CopilotClient(opts as ConstructorParameters<typeof CopilotClient>[0]);
-      await this.client.start();
+      try {
+        await this.client.start();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // If the port is already in use, connect as a secondary client instead of spawning
+        if (serverConfig.enabled && msg.includes('EADDRINUSE')) {
+          console.log(`[CopilotService] Port ${serverConfig.port} in use, connecting as secondary client`);
+          const { CopilotClient: FreshClient } = await loadSDK();
+          const fallbackOpts: Record<string, unknown> = {
+            cliUrl: `localhost:${serverConfig.port}`,
+            autoStart: false,
+          };
+          if (opts.githubToken) fallbackOpts.githubToken = opts.githubToken;
+          if (opts.logLevel) fallbackOpts.logLevel = opts.logLevel;
+          this.client = new FreshClient(fallbackOpts as ConstructorParameters<typeof CopilotClient>[0]);
+          await this.client.start();
+        } else {
+          throw err;
+        }
+      }
       this.started = true;
+
+      // In server mode, track external sessions via lifecycle events
+      if (serverConfig.enabled) {
+        this.subscribeToLifecycleEvents();
+      }
     }
   }
 
@@ -991,6 +1141,7 @@ export class CopilotService {
       }
       session = await this.client!.createSession(opts as unknown as Parameters<CopilotClientType['createSession']>[0]);
       this.sessions.set(panelId, session);
+      this.ownSessionIds.add(session.sessionId);
     }
     return session;
   }
@@ -1065,11 +1216,32 @@ export class CopilotService {
       await session.disconnect().catch(() => {});
     }
     this.sessions.clear();
+    this.ownSessionIds.clear();
+    this.externalSessionCount = 0;
+    if (this.lifecycleUnsub) {
+      this.lifecycleUnsub();
+      this.lifecycleUnsub = null;
+    }
     if (this.client) {
       await (this.client as unknown as { stop?: () => Promise<void> }).stop?.().catch(() => {});
     }
     this.client = null as unknown as CopilotClientType;
     this.started = false;
+  }
+
+  /** Subscribe to session lifecycle events to track external clients connecting to our runtime. */
+  private subscribeToLifecycleEvents(): void {
+    if (!this.client || this.lifecycleUnsub) return;
+    this.lifecycleUnsub = this.client.on((event: { type: string; sessionId?: string }) => {
+      if (!event.sessionId) return;
+      if (event.type === 'session.created' && !this.ownSessionIds.has(event.sessionId)) {
+        this.externalSessionCount++;
+        console.log(`[CopilotService] External session connected (${this.externalSessionCount} total)`);
+      } else if (event.type === 'session.deleted' && !this.ownSessionIds.has(event.sessionId)) {
+        this.externalSessionCount = Math.max(0, this.externalSessionCount - 1);
+        console.log(`[CopilotService] External session disconnected (${this.externalSessionCount} total)`);
+      }
+    });
   }
 
   private abortResolves = new Map<string, () => void>();
@@ -1383,6 +1555,12 @@ export class CopilotService {
     for (const [id, session] of this.sessions) {
       await session.disconnect().catch(() => {});
       this.sessions.delete(id);
+    }
+    this.ownSessionIds.clear();
+    this.externalSessionCount = 0;
+    if (this.lifecycleUnsub) {
+      this.lifecycleUnsub();
+      this.lifecycleUnsub = null;
     }
     if (this.started && this.client) {
       await this.client.stop();

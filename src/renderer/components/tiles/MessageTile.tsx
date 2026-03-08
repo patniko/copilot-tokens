@@ -19,7 +19,17 @@ function normalizeNewlines(text: string): string {
     return placeholder;
   });
 
-  // Collapse single \n (not preceded/followed by another \n) into space
+  // Collapse \n\n to space when it appears mid-sentence (not a real paragraph break).
+  // A real paragraph break ends with sentence punctuation (. ! ? :) or a block element follows.
+  // This prevents \n\n from breaking inline markdown formatting like **bold**.
+  normalized = normalized.replace(/([^.!?\n:>])\n\n([^\n#\->*|`\d])/g, '$1 $2');
+
+  // Collapse 3+ consecutive newlines to a proper paragraph break
+  normalized = normalized.replace(/\n{3,}/g, '\n\n');
+
+  // Collapse single \n (not preceded/followed by another \n) into space.
+  // Run twice to catch adjacent replacements (regex doesn't re-match consumed chars).
+  normalized = normalized.replace(/([^\n])\n([^\n])/g, '$1 $2');
   normalized = normalized.replace(/([^\n])\n([^\n])/g, '$1 $2');
 
   // Restore code blocks

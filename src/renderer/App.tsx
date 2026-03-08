@@ -72,10 +72,33 @@ export default function App() {
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const preTaskModelRef = useRef<string | null>(null);
 
+  // Server mode
+  const [serverEnabled, setServerEnabled] = useState(false);
+  const [serverPort, setServerPort] = useState(19900);
+  const [serverExternalCount, setServerExternalCount] = useState(0);
+  const [serverSwitching, setServerSwitching] = useState(false);
+
   // Fullscreen state (traffic lights hidden in fullscreen)
   const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
     return window.windowAPI?.onFullscreenChange(setIsFullscreen);
+  }, []);
+
+  // Load server mode state on mount + poll external session count while active
+  useEffect(() => {
+    window.serverAPI?.getInfo().then(info => {
+      setServerEnabled(info.enabled);
+      setServerPort(info.port);
+      setServerExternalCount(info.externalSessionCount);
+    }).catch(() => {});
+
+    const interval = setInterval(() => {
+      window.serverAPI?.getInfo().then(info => {
+        setServerExternalCount(info.externalSessionCount);
+        setServerEnabled(info.enabled);
+      }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   // --- Tab state ---
@@ -895,11 +918,13 @@ export default function App() {
 
       setTimeout(() => {
         if (!sessionStartRef.current) sessionStartRef.current = Date.now();
-        // Fire the prompt into the new tab's panel
+        // Show the user prompt in the new tab's ReelArea
         updateTab(newTabId, (tab) => ({
           ...tab,
           panels: tab.panels.map(p => p.id === panelId ? { ...p, userPrompt: data.prompt } : p),
         }));
+        // Send the message to the backend for the new panel
+        window.copilotAPI?.sendMessage(data.prompt, undefined, panelId);
         requestAnimationFrame(() => {
           updateTab(newTabId, (tab) => ({
             ...tab,
@@ -1267,6 +1292,54 @@ export default function App() {
               YOLO
             </button>
             <button
+              onClick={async () => {
+                if (serverSwitching) return;
+                setServerSwitching(true);
+                try {
+                  if (serverEnabled) {
+                    await window.serverAPI?.disable();
+                    setServerEnabled(false);
+                    setServerExternalCount(0);
+                    SoundManager.getInstance().play('yoloOff');
+                  } else {
+                    await window.serverAPI?.enable(serverPort);
+                    setServerEnabled(true);
+                    SoundManager.getInstance().play('yoloOn');
+                  }
+                } catch (err) {
+                  console.error('[ServerMode] Toggle failed:', err);
+                } finally {
+                  setServerSwitching(false);
+                }
+              }}
+              disabled={serverSwitching}
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-1 font-bold text-[10px] ${
+                serverSwitching
+                  ? 'text-[var(--text-secondary)] opacity-50 cursor-wait'
+                  : serverEnabled
+                    ? 'text-[var(--accent-green)] bg-[var(--accent-green)]/15'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]'
+              }`}
+              title={
+                serverSwitching
+                  ? 'Switching…'
+                  : serverEnabled
+                    ? `Server ON — :${serverPort}${serverExternalCount > 0 ? ` · ${serverExternalCount} client${serverExternalCount !== 1 ? 's' : ''}` : ''}\nExternal agents can connect with: { cliUrl: 'localhost:${serverPort}' }`
+                    : 'Enable server mode — expose runtime on TCP so external agents can connect'
+              }
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+              </svg>
+              {serverSwitching ? '…' : serverEnabled ? `:${serverPort}` : 'Server'}
+              {serverEnabled && serverExternalCount > 0 && (
+                <span className="ml-0.5 px-1 rounded-full bg-[var(--accent-green)]/25 text-[8px]">
+                  {serverExternalCount}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setSchedulerOpen(true)}
               className="px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-1 font-bold text-[10px] text-[var(--text-secondary)] hover:text-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/10"
               title="Scheduled tasks"
@@ -1317,7 +1390,7 @@ export default function App() {
 
           {/* Reel / Conversation Area (Center) */}
           <section className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            {sessionBrowserOpen ? (
+            {sessionBrowserOpen && (
               <SessionBrowser
                 onSelect={async (session) => {
                   setSessionBrowserOpen(false);
@@ -1350,22 +1423,30 @@ export default function App() {
                   }
                 }}
               />
-            ) : (
-              <SplitLayout
-                panels={panels}
-                onUsage={handleUsage}
-                onPanelSend={handlePanelSend}
-                cwd={cwd}
-                onBrowseCwd={handleBrowseCwd}
-                permissionRequest={permissionRequest}
-                onPermissionRespond={handlePermissionRespond}
-                onNewSession={handleReset}
-                onLoadSession={() => setSessionBrowserOpen(true)}
-                onSplitSession={handleAddPanel}
-                onClosePanel={handleClosePanel}
-                onBadge={triggerBadge}
-              />
             )}
+            {/* Render ALL tabs but only show the active one — keeps conversation state alive */}
+            {tabs.map((tab) => (
+              <div
+                key={tab.id}
+                className="flex-1 min-w-0 flex flex-col overflow-hidden"
+                style={{ display: tab.id === activeTabId && !sessionBrowserOpen ? 'flex' : 'none' }}
+              >
+                <SplitLayout
+                  panels={tab.panels}
+                  onUsage={handleUsage}
+                  onPanelSend={handlePanelSend}
+                  cwd={tab.cwd}
+                  onBrowseCwd={handleBrowseCwd}
+                  permissionRequest={tab.id === activeTabId ? permissionRequest : undefined}
+                  onPermissionRespond={tab.id === activeTabId ? handlePermissionRespond : undefined}
+                  onNewSession={handleReset}
+                  onLoadSession={() => setSessionBrowserOpen(true)}
+                  onSplitSession={handleAddPanel}
+                  onClosePanel={handleClosePanel}
+                  onBadge={triggerBadge}
+                />
+              </div>
+            ))}
           </section>
         </main>
         <AchievementsModal isOpen={achievementsOpen} onClose={() => setAchievementsOpen(false)} onReplaySession={(ts) => { setAchievementsOpen(false); setReplaySessionTimestamp(ts); }} initialTab={achievementsTab} />
