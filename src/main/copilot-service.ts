@@ -1020,18 +1020,25 @@ export class CopilotService {
       if (features.askUser && this.userInputCallback) {
         opts.onUserInputRequest = this.userInputCallback;
       }
-      // Reasoning effort — per-panel override → global setting. Only if the selected model supports it.
+      // Reasoning effort — per-panel override → global setting.
+      // For BYOK providers, trust the caller (upstream provider validates).
+      // For Copilot-native, verify the model supports it via capabilities.
       const panelEffort = this.panelReasoningEffort.get(panelId);
       const effort = panelEffort !== undefined ? panelEffort : this.getReasoningEffort();
       if (features.reasoning && effort) {
-        try {
-          const models = await this.client!.listModels();
-          const info = models.find(m => m.id === effectiveModel);
-          if (info?.capabilities?.supports?.reasoningEffort) {
-            opts.reasoningEffort = effort;
+        const isByok = !!opts.provider;
+        if (isByok) {
+          opts.reasoningEffort = effort;
+        } else {
+          try {
+            const models = await this.client!.listModels();
+            const info = models.find(m => m.id === effectiveModel);
+            if (info?.capabilities?.supports?.reasoningEffort) {
+              opts.reasoningEffort = effort;
+            }
+          } catch {
+            // If we can't verify, skip reasoning effort to avoid session.create failure
           }
-        } catch {
-          // If we can't verify, skip reasoning effort to avoid session.create failure
         }
       }
       // Infinite sessions with configurable compaction thresholds
