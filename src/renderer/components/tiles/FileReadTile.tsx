@@ -20,53 +20,52 @@ export default function FileReadTile({ path, content, isRunning }: FileReadTileP
   const { name, dir } = friendlyPath(path);
 
   return (
-    <div
-      className="glass-card w-full p-4 overflow-hidden"
-      style={{ borderLeft: '4px solid var(--accent-purple)' }}
-    >
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-3 min-w-0" title={path}>
-        <span>👁</span>
-        <span className="text-sm font-mono truncate" style={{ color: 'var(--text-primary)' }}>
+    <div className="w-full overflow-hidden">
+      {/* Compact header row */}
+      <button
+        onClick={() => content && setExpanded(!expanded)}
+        className="flex items-center gap-2 min-w-0 w-full text-left px-3 py-1.5 rounded-md cursor-pointer"
+        style={{
+          background: 'none',
+          border: 'none',
+          borderLeft: '3px solid var(--accent-purple)',
+        }}
+        title={path}
+      >
+        <span className="text-xs shrink-0">👁</span>
+        <span className="text-xs font-mono truncate" style={{ color: 'var(--text-primary)' }}>
           {name}
         </span>
         {dir && (
-          <span className="text-xs text-[var(--text-secondary)] truncate shrink">
+          <span className="text-xs truncate shrink" style={{ color: 'var(--text-secondary)' }}>
             {dir}
           </span>
         )}
-        {isRunning && (
-          <span className="text-xs italic" style={{ color: 'var(--text-secondary)', animation: 'pulse-dot 1.5s ease-in-out infinite' }}>
+        {isRunning ? (
+          <span className="text-xs italic shrink-0" style={{ color: 'var(--text-secondary)', animation: 'pulse-dot 1.5s ease-in-out infinite' }}>
             reading…
           </span>
-        )}
-      </div>
+        ) : content ? (
+          <span className="text-xs shrink-0 ml-auto" style={{ color: 'var(--text-secondary)' }}>
+            {lines.length} lines {expanded ? '▾' : '▸'}
+          </span>
+        ) : null}
+      </button>
 
-      {/* Content */}
+      {/* Expandable content */}
       {content && expanded && (
         <motion.pre
-          className="text-xs font-mono overflow-x-auto rounded-lg p-3"
+          className="text-xs font-mono overflow-x-auto rounded-lg p-3 ml-3 mt-1"
           style={{
             backgroundColor: 'rgba(0,0,0,0.3)',
             color: 'var(--text-secondary)',
           }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          transition={{ duration: 0.2 }}
         >
           {lines.join('\n')}
         </motion.pre>
-      )}
-
-      {/* Toggle */}
-      {content && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="mt-2 text-xs cursor-pointer"
-          style={{ color: 'var(--accent-blue)', background: 'none', border: 'none' }}
-        >
-          {expanded ? 'Hide content' : `See all ${lines.length} lines`}
-        </button>
       )}
     </div>
   );
