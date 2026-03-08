@@ -11,7 +11,7 @@ interface Attachment {
 
 interface PromptBarProps {
   panelId?: string;
-  onSend?: (prompt: string, attachments?: { path: string }[]) => void;
+  onSend?: (prompt: string, attachments?: { path: string }[], mode?: 'enqueue' | 'immediate') => void;
   onGeneratingChange?: (generating: boolean) => void;
   cwd?: string;
   onBrowseCwd?: () => void;
@@ -139,7 +139,7 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
     });
   }, []);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback((sendMode?: 'enqueue' | 'immediate') => {
     if (!cwd) {
       onBrowseCwd?.();
       return;
@@ -150,16 +150,16 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
     const atts = attachments.length > 0 ? attachments.map(a => ({ path: a.path })) : undefined;
     const message = trimmed || 'Describe this image.';
 
-    if (isGenerating) {
+    if (isGenerating && sendMode !== 'immediate') {
       // Queue the message for when the current turn finishes
       setQueue(prev => [...prev, { prompt: message, attachments: atts }]);
       onBadge?.('badge-first-queue');
     } else {
-      window.copilotAPI?.sendMessage(message, atts, panelId);
+      window.copilotAPI?.sendMessage(message, atts, panelId, sendMode);
       setGenerating(true);
     }
     if (atts) onBadge?.('badge-first-image');
-    onSend?.(message, atts);
+    onSend?.(message, atts, sendMode);
     historyRef.current.unshift(message);
     historyIndexRef.current = -1;
     draftRef.current = '';
@@ -173,7 +173,11 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
     setGenerating(false);
   }, [setGenerating, panelId]);
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      // Cmd/Ctrl+Shift+Enter → send immediate (interrupts current turn)
+      e.preventDefault();
+      handleSend('immediate');
+    } else if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -483,7 +487,7 @@ export default function PromptBar({ panelId, onSend, onGeneratingChange, cwd, on
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.15 }}
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--accent-gold)] text-black cursor-pointer"
                 title="Send (Enter)"
               >

@@ -42,11 +42,17 @@ const mockCopilot = {
   setReasoningEffort: vi.fn(),
   setExcludedTools: vi.fn(),
   getExcludedTools: vi.fn().mockReturnValue([]),
-  getCustomToolNames: vi.fn().mockReturnValue(['tool-a', 'tool-b']),
+  getCustomToolNames: vi.fn().mockResolvedValue(['tool-a', 'tool-b']),
   listSessions: vi.fn().mockResolvedValue([{ id: 's1' }]),
   resumeSession: vi.fn().mockResolvedValue({ sessionId: 's1' }),
   getCustomAgents: vi.fn().mockReturnValue([]),
   setCustomAgents: vi.fn(),
+  getCompactionThresholds: vi.fn().mockReturnValue({ background: 0.80, bufferExhaustion: 0.95 }),
+  setCompactionThresholds: vi.fn(),
+  getSkillDirectories: vi.fn().mockReturnValue([]),
+  setSkillDirectories: vi.fn(),
+  getDisabledSkills: vi.fn().mockReturnValue([]),
+  setDisabledSkills: vi.fn(),
   getSystemPrompt: vi.fn().mockReturnValue(null),
   setSystemPrompt: vi.fn(),
   getCliMode: vi.fn().mockReturnValue(null),
@@ -339,6 +345,8 @@ describe('copilot channels', () => {
       expect.any(Function),
       undefined,
       'main',
+      false,
+      undefined,
     );
   });
 
@@ -375,8 +383,8 @@ describe('copilot channels', () => {
     expect(mockCopilot.destroySession).toHaveBeenCalledWith('split');
   });
 
-  it('copilot:getCustomToolNames — returns tool names from copilot service', () => {
-    const result = invoke('copilot:getCustomToolNames');
+  it('copilot:getCustomToolNames — returns tool names from copilot service', async () => {
+    const result = await invoke('copilot:getCustomToolNames');
     expect(mockCopilot.getCustomToolNames).toHaveBeenCalled();
     expect(result).toEqual(['tool-a', 'tool-b']);
   });

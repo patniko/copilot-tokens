@@ -14,6 +14,24 @@ export interface DashboardStats {
   toolCalls: number;
 }
 
+interface QuotaInfo {
+  quotaId: string;
+  usedRequests: number;
+  entitlementRequests: number;
+  remainingPercentage: number;
+  overage: number;
+  resetDate?: string;
+  isUnlimited: boolean;
+}
+
+interface UsageDetails {
+  totalCost: number;
+  totalDuration: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  quota: QuotaInfo | null;
+}
+
 interface TokenDashboardProps {
   inputTokenCount?: number;
   contextWindow?: number;
@@ -36,6 +54,7 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
   const [stats, setStats] = useState<DashboardStats>(initialStats);
   const [gitStats, setGitStats] = useState<{ filesChanged: number; linesAdded: number; linesRemoved: number } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ currentTokens: number; tokenLimit: number } | null>(null);
+  const [usageDetails, setUsageDetails] = useState<UsageDetails>({ totalCost: 0, totalDuration: 0, cacheReadTokens: 0, cacheWriteTokens: 0, quota: null });
   const statsRef = useRef(stats);
 
   // Keep ref in sync for event callbacks
@@ -119,6 +138,38 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
           next.outputTokens = prev.realOutputTokens + output;
           next.realOutputTokens = prev.realOutputTokens + output;
         }
+        // Rich usage details
+        const cost = (ev.cost ?? 0) as number;
+        const duration = (ev.duration ?? 0) as number;
+        const cacheRead = (ev.cacheReadTokens ?? 0) as number;
+        const cacheWrite = (ev.cacheWriteTokens ?? 0) as number;
+        const snapshots = ev.quotaSnapshots as Record<string, { isUnlimitedEntitlement: boolean; entitlementRequests: number; usedRequests: number; remainingPercentage: number; overage: number; resetDate?: string }> | undefined;
+        setUsageDetails(prev => {
+          const updated = {
+            totalCost: prev.totalCost + cost,
+            totalDuration: prev.totalDuration + duration,
+            cacheReadTokens: prev.cacheReadTokens + cacheRead,
+            cacheWriteTokens: prev.cacheWriteTokens + cacheWrite,
+            quota: prev.quota,
+          };
+          // Use the latest quota snapshot (take the first one available)
+          if (snapshots) {
+            const firstKey = Object.keys(snapshots)[0];
+            if (firstKey) {
+              const s = snapshots[firstKey];
+              updated.quota = {
+                quotaId: firstKey,
+                usedRequests: s.usedRequests,
+                entitlementRequests: s.entitlementRequests,
+                remainingPercentage: s.remainingPercentage,
+                overage: s.overage,
+                resetDate: s.resetDate,
+                isUnlimited: s.isUnlimitedEntitlement,
+              };
+            }
+          }
+          return updated;
+        });
       }
 
       if (type === 'tool.start') {
@@ -168,6 +219,67 @@ export default function TokenDashboard({ inputTokenCount, contextWindow, onStats
           maxTokens={contextUsage?.tokenLimit ?? contextWindow}
         />
       </Section>
+
+      {/* Usage Details (cost, cache, duration) */}
+      {(usageDetails.totalCost > 0 || usageDetails.cacheReadTokens > 0) && (
+        <Section title="Usage">
+          <div className="flex gap-4 items-end flex-wrap">
+            {usageDetails.totalCost > 0 && (
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">Cost</span>
+                <span className="text-xs font-mono text-[var(--accent-gold)]">{(usageDetails.totalCost).toFixed(4)}</span>
+              </div>
+            )}
+            {usageDetails.totalDuration > 0 && (
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">API Time</span>
+                <span className="text-xs font-mono text-[var(--text-primary)]">{(usageDetails.totalDuration / 1000).toFixed(1)}s</span>
+              </div>
+            )}
+            {usageDetails.cacheReadTokens > 0 && (
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">Cache ↓</span>
+                <span className="text-xs font-mono text-[var(--accent-green)]">{usageDetails.cacheReadTokens.toLocaleString()}</span>
+              </div>
+            )}
+            {usageDetails.cacheWriteTokens > 0 && (
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">Cache ↑</span>
+                <span className="text-xs font-mono text-[var(--accent-purple)]">{usageDetails.cacheWriteTokens.toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
+
+      {/* Quota */}
+      {usageDetails.quota && !usageDetails.quota.isUnlimited && (
+        <Section title="Quota">
+          <div className="flex flex-col gap-1">
+            <div className="flex justify-between text-[10px]">
+              <span className="text-[var(--text-secondary)]">{usageDetails.quota.usedRequests} / {usageDetails.quota.entitlementRequests} requests</span>
+              <span className={usageDetails.quota.remainingPercentage < 0.2 ? 'text-[var(--accent-red)]' : 'text-[var(--text-secondary)]'}>
+                {Math.round(usageDetails.quota.remainingPercentage * 100)}% left
+              </span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.min(100, (1 - usageDetails.quota.remainingPercentage) * 100)}%`,
+                  backgroundColor: usageDetails.quota.remainingPercentage < 0.2 ? 'var(--accent-red)' : usageDetails.quota.remainingPercentage < 0.5 ? 'var(--accent-gold)' : 'var(--accent-green)',
+                }}
+              />
+            </div>
+            {usageDetails.quota.overage > 0 && (
+              <span className="text-[9px] text-[var(--accent-red)]">⚠ {usageDetails.quota.overage} overage requests</span>
+            )}
+            {usageDetails.quota.resetDate && (
+              <span className="text-[9px] text-[var(--text-secondary)]">Resets {new Date(usageDetails.quota.resetDate).toLocaleDateString()}</span>
+            )}
+          </div>
+        </Section>
+      )}
 
       {/* File Stats */}
       <Section title="Changes">
