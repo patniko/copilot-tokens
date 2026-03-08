@@ -918,11 +918,13 @@ export default function App() {
 
       setTimeout(() => {
         if (!sessionStartRef.current) sessionStartRef.current = Date.now();
-        // Fire the prompt into the new tab's panel
+        // Show the user prompt in the new tab's ReelArea
         updateTab(newTabId, (tab) => ({
           ...tab,
           panels: tab.panels.map(p => p.id === panelId ? { ...p, userPrompt: data.prompt } : p),
         }));
+        // Send the message to the backend for the new panel
+        window.copilotAPI?.sendMessage(data.prompt, undefined, panelId);
         requestAnimationFrame(() => {
           updateTab(newTabId, (tab) => ({
             ...tab,
