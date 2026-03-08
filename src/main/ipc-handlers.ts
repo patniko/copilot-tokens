@@ -787,4 +787,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle('scheduler:runNow', (_e, taskId: string) => {
     return scheduler.runNow(taskId);
   });
+
+  // ── Server Mode ────────────────────────────────────────────────────
+  ipcMain.handle('server:enable', async (_event, port: number) => {
+    await copilot.enableServerMode(port);
+  });
+
+  ipcMain.handle('server:disable', async () => {
+    await copilot.disableServerMode();
+  });
+
+  ipcMain.handle('server:getInfo', () => {
+    return copilot.getServerInfo();
+  });
 }

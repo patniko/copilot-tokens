@@ -195,6 +195,12 @@ interface SchedulerAPI {
   onTaskFired(callback: (task: ScheduledTaskData) => void): () => void;
 }
 
+interface ServerAPI {
+  enable(port: number): Promise<void>;
+  disable(): Promise<void>;
+  getInfo(): Promise<{ enabled: boolean; port: number; state: string; externalSessionCount: number }>;
+}
+
 declare global {
   type ModelInfoData = { id: string; name: string; contextWindow: number; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string };
 
@@ -215,6 +221,7 @@ declare global {
     agentsAPI: AgentsAPI;
     windowAPI: WindowAPI;
     schedulerAPI: SchedulerAPI;
+    serverAPI: ServerAPI;
   }
 }
 

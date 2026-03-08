@@ -434,3 +434,15 @@ contextBridge.exposeInMainWorld('windowAPI', {
     return () => ipcRenderer.removeListener('window:fullscreen', listener);
   },
 });
+
+contextBridge.exposeInMainWorld('serverAPI', {
+  enable(port: number): Promise<void> {
+    return ipcRenderer.invoke('server:enable', port);
+  },
+  disable(): Promise<void> {
+    return ipcRenderer.invoke('server:disable');
+  },
+  getInfo(): Promise<{ enabled: boolean; port: number; state: string; externalSessionCount: number }> {
+    return ipcRenderer.invoke('server:getInfo');
+  },
+});
