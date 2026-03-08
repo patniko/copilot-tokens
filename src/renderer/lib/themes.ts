@@ -140,7 +140,13 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(themes['neon-arcade']);
+  const [theme, setThemeState] = useState<Theme>(() => {
+    try {
+      const saved = localStorage.getItem('copilot-tokens-theme');
+      if (saved && themes[saved]) return themes[saved];
+    } catch { /* ignore */ }
+    return themes['neon-arcade'];
+  });
 
   useEffect(() => {
     applyTheme(theme);
@@ -148,7 +154,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setTheme = (name: string) => {
     const next = themes[name];
-    if (next) setThemeState(next);
+    if (next) {
+      setThemeState(next);
+      try { localStorage.setItem('copilot-tokens-theme', name); } catch { /* ignore */ }
+    }
   };
 
   return createElement(

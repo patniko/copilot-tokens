@@ -396,7 +396,16 @@ class SoundManager {
 
   private overrides: Partial<Record<SoundName, SoundGenerator>> = {};
 
-  private constructor() {}
+  private constructor() {
+    try {
+      const saved = localStorage.getItem('copilot-tokens-sound');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.enabled === 'boolean') this.enabled = parsed.enabled;
+        if (typeof parsed.volume === 'number') this.volume = parsed.volume;
+      }
+    } catch { /* ignore */ }
+  }
 
   static getInstance(): SoundManager {
     if (!SoundManager.instance) {
@@ -440,6 +449,7 @@ class SoundManager {
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
+    this.persistSettings();
   }
 
   isEnabled(): boolean {
@@ -451,10 +461,15 @@ class SoundManager {
     if (this.masterGain) {
       this.masterGain.gain.value = this.volume;
     }
+    this.persistSettings();
   }
 
   getVolume(): number {
     return this.volume;
+  }
+
+  private persistSettings(): void {
+    try { localStorage.setItem('copilot-tokens-sound', JSON.stringify({ enabled: this.enabled, volume: this.volume })); } catch { /* ignore */ }
   }
 }
 
