@@ -4,7 +4,7 @@ import type { ConnectionProfile } from '../../main/profile-service';
 import type { MilestonePack, SoundPack, ThemePack } from '../lib/pack-types';
 
 interface CopilotAPI {
-  sendMessage(prompt: string, attachments?: { path: string }[], panelId?: string): void;
+  sendMessage(prompt: string, attachments?: { path: string }[], panelId?: string, mode?: 'enqueue' | 'immediate'): void;
   abort(panelId?: string): void;
   destroySession(panelId: string): void;
   onEvent(callback: (event: unknown) => void, panelId?: string): () => void;
@@ -110,6 +110,18 @@ interface AgentsAPI {
   set(agents: { name: string; displayName?: string; description?: string; tools?: string[] | null; prompt: string }[]): Promise<void>;
 }
 
+interface CompactionAPI {
+  get(): Promise<{ background: number; bufferExhaustion: number }>;
+  set(thresholds: { background: number; bufferExhaustion: number }): Promise<void>;
+}
+
+interface SkillsAPI {
+  getDirectories(): Promise<string[]>;
+  setDirectories(dirs: string[]): Promise<void>;
+  getDisabled(): Promise<string[]>;
+  setDisabled(skills: string[]): Promise<void>;
+}
+
 interface PackAPI {
   listMilestonePacks(): Promise<MilestonePack[]>;
   saveMilestonePack(pack: MilestonePack): Promise<void>;
@@ -213,6 +225,8 @@ declare global {
     featuresAPI: FeaturesAPI;
     sessionsAPI: SessionsAPI;
     agentsAPI: AgentsAPI;
+    compactionAPI: CompactionAPI;
+    skillsAPI: SkillsAPI;
     windowAPI: WindowAPI;
     schedulerAPI: SchedulerAPI;
   }

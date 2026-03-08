@@ -4,7 +4,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useSound } from '../hooks/useSound';
 import type { Theme } from '../lib/themes';
 
-type SettingsTab = 'general' | 'features' | 'prompt';
+type SettingsTab = 'general' | 'features' | 'prompt' | 'skills';
 
 type CliMode =
   | { type: 'bundled' }
@@ -59,11 +59,22 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
     reasoning: true,
     infiniteSessions: true,
     hooks: true,
-    customAgents: false,
+    customAgents: true,
     sessionEvents: true,
   });
   const [featuresSaved, setFeaturesSaved] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState<string | null>(null);
+
+  // Compaction thresholds
+  const [compaction, setCompaction] = useState({ background: 0.80, bufferExhaustion: 0.95 });
+  const [compactionSaved, setCompactionSaved] = useState(false);
+
+  // Skill management
+  const [skillDirectories, setSkillDirectories] = useState<string[]>([]);
+  const [disabledSkills, setDisabledSkills] = useState<string[]>([]);
+  const [newSkillDir, setNewSkillDir] = useState('');
+  const [newDisabledSkill, setNewDisabledSkill] = useState('');
+  const [skillsSaved, setSkillsSaved] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -94,6 +105,13 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
     if (window.featuresAPI) {
       window.featuresAPI.get().then(setFeatures);
       window.featuresAPI.getReasoningEffort().then(setReasoningEffort);
+    }
+    if (window.compactionAPI) {
+      window.compactionAPI.get().then(setCompaction);
+    }
+    if (window.skillsAPI) {
+      window.skillsAPI.getDirectories().then(setSkillDirectories);
+      window.skillsAPI.getDisabled().then(setDisabledSkills);
     }
   }, [isOpen]);
 
@@ -176,6 +194,7 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
                 {([
                   { id: 'general' as SettingsTab, label: 'General', icon: '🎨' },
                   { id: 'features' as SettingsTab, label: 'SDK Features', icon: '⚡' },
+                  { id: 'skills' as SettingsTab, label: 'Skills', icon: '🧩' },
                   { id: 'prompt' as SettingsTab, label: 'System Prompt', icon: '📝' },
                 ] as const).map((t) => (
                   <button
@@ -402,6 +421,177 @@ export default function Settings({ isOpen, onClose, onModelChange }: SettingsPro
 
                     {featuresSaved && (
                       <span className="text-xs text-[var(--accent-green)]">✓ Features updated — sessions restarted</span>
+                    )}
+
+                    {/* Compaction Thresholds — only visible when infinite sessions is on */}
+                    {features.infiniteSessions && (
+                      <section className="mt-2 border-t border-[var(--border-color)] pt-4">
+                        <label className="block text-sm uppercase tracking-wider text-[var(--text-secondary)] mb-2">
+                          Compaction Thresholds
+                        </label>
+                        <p className="text-xs text-[var(--text-secondary)] mb-3">
+                          Control when context compaction triggers. Background compaction runs async; buffer exhaustion blocks until done.
+                        </p>
+                        <div className="flex flex-col gap-3">
+                          <div>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-[var(--text-secondary)]">Background compaction</span>
+                              <span className="text-[var(--text-primary)] font-mono">{Math.round(compaction.background * 100)}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.5"
+                              max="0.95"
+                              step="0.05"
+                              value={compaction.background}
+                              onChange={(e) => setCompaction(prev => ({ ...prev, background: parseFloat(e.target.value) }))}
+                              className="w-full accent-[var(--accent-purple)]"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-[var(--text-secondary)]">Buffer exhaustion</span>
+                              <span className="text-[var(--text-primary)] font-mono">{Math.round(compaction.bufferExhaustion * 100)}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.8"
+                              max="1.0"
+                              step="0.01"
+                              value={compaction.bufferExhaustion}
+                              onChange={(e) => setCompaction(prev => ({ ...prev, bufferExhaustion: parseFloat(e.target.value) }))}
+                              className="w-full accent-[var(--accent-red)]"
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              window.compactionAPI?.set(compaction);
+                              setCompactionSaved(true);
+                              setTimeout(() => setCompactionSaved(false), 2000);
+                            }}
+                            className="self-start px-3 py-1.5 text-xs rounded-lg border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer"
+                          >
+                            Apply Thresholds
+                          </button>
+                          {compactionSaved && (
+                            <span className="text-xs text-[var(--accent-green)]">✓ Thresholds updated — sessions restarted</span>
+                          )}
+                        </div>
+                      </section>
+                    )}
+                  </div>
+                ) : tab === 'skills' ? (
+                  /* Skills Management Tab */
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <label className="block text-sm uppercase tracking-wider text-[var(--text-secondary)] mb-2">
+                        Skill Directories
+                      </label>
+                      <p className="text-xs text-[var(--text-secondary)] mb-3">
+                        Add directories containing custom Copilot skills. Skills provide specialized domain knowledge and capabilities.
+                      </p>
+                    </div>
+
+                    {/* Existing skill directories */}
+                    {skillDirectories.length > 0 && (
+                      <div className="flex flex-col gap-1">
+                        {skillDirectories.map((dir, i) => (
+                          <div key={i} className="flex items-center justify-between p-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)]">
+                            <span className="text-xs font-mono text-[var(--text-primary)] truncate flex-1">{dir}</span>
+                            <button
+                              onClick={() => {
+                                const updated = skillDirectories.filter((_, j) => j !== i);
+                                setSkillDirectories(updated);
+                                window.skillsAPI?.setDirectories(updated);
+                              }}
+                              className="ml-2 text-[var(--text-secondary)] hover:text-[var(--accent-red)] cursor-pointer text-sm"
+                            >✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add new skill directory */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newSkillDir}
+                        onChange={(e) => setNewSkillDir(e.target.value)}
+                        placeholder="/path/to/skills"
+                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono"
+                      />
+                      <button
+                        onClick={() => {
+                          if (newSkillDir.trim()) {
+                            const updated = [...skillDirectories, newSkillDir.trim()];
+                            setSkillDirectories(updated);
+                            window.skillsAPI?.setDirectories(updated);
+                            setNewSkillDir('');
+                            setSkillsSaved(true);
+                            setTimeout(() => setSkillsSaved(false), 2000);
+                          }
+                        }}
+                        className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {/* Disabled Skills */}
+                    <div className="mt-2 border-t border-[var(--border-color)] pt-4">
+                      <label className="block text-sm uppercase tracking-wider text-[var(--text-secondary)] mb-2">
+                        Disabled Skills
+                      </label>
+                      <p className="text-xs text-[var(--text-secondary)] mb-3">
+                        Skills listed here will not be loaded, even if present in skill directories.
+                      </p>
+
+                      {disabledSkills.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {disabledSkills.map((skill, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-secondary)]">
+                              {skill}
+                              <button
+                                onClick={() => {
+                                  const updated = disabledSkills.filter((_, j) => j !== i);
+                                  setDisabledSkills(updated);
+                                  window.skillsAPI?.setDisabled(updated);
+                                }}
+                                className="hover:text-[var(--accent-red)] cursor-pointer"
+                              >✕</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newDisabledSkill}
+                          onChange={(e) => setNewDisabledSkill(e.target.value)}
+                          placeholder="skill-name"
+                          className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono"
+                        />
+                        <button
+                          onClick={() => {
+                            if (newDisabledSkill.trim()) {
+                              const updated = [...disabledSkills, newDisabledSkill.trim()];
+                              setDisabledSkills(updated);
+                              window.skillsAPI?.setDisabled(updated);
+                              setNewDisabledSkill('');
+                              setSkillsSaved(true);
+                              setTimeout(() => setSkillsSaved(false), 2000);
+                            }
+                          }}
+                          className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors cursor-pointer"
+                        >
+                          Disable
+                        </button>
+                      </div>
+                    </div>
+
+                    {skillsSaved && (
+                      <span className="text-xs text-[var(--accent-green)]">✓ Skills updated — sessions restarted</span>
                     )}
                   </div>
                 ) : (

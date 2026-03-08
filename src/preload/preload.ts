@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('copilotAPI', {
-  sendMessage(prompt: string, attachments?: { path: string }[], panelId?: string): void {
-    ipcRenderer.invoke('copilot:sendMessage', prompt, attachments, panelId);
+  sendMessage(prompt: string, attachments?: { path: string }[], panelId?: string, mode?: 'enqueue' | 'immediate'): void {
+    ipcRenderer.invoke('copilot:sendMessage', prompt, attachments, panelId, mode);
   },
   abort(panelId?: string): void {
     ipcRenderer.invoke('copilot:abort', panelId);
@@ -230,6 +230,30 @@ contextBridge.exposeInMainWorld('agentsAPI', {
   },
   set(agents: { name: string; displayName?: string; description?: string; tools?: string[] | null; prompt: string }[]): Promise<void> {
     return ipcRenderer.invoke('agents:set', agents);
+  },
+});
+
+contextBridge.exposeInMainWorld('compactionAPI', {
+  get(): Promise<{ background: number; bufferExhaustion: number }> {
+    return ipcRenderer.invoke('compaction:get');
+  },
+  set(thresholds: { background: number; bufferExhaustion: number }): Promise<void> {
+    return ipcRenderer.invoke('compaction:set', thresholds);
+  },
+});
+
+contextBridge.exposeInMainWorld('skillsAPI', {
+  getDirectories(): Promise<string[]> {
+    return ipcRenderer.invoke('skills:getDirectories');
+  },
+  setDirectories(dirs: string[]): Promise<void> {
+    return ipcRenderer.invoke('skills:setDirectories', dirs);
+  },
+  getDisabled(): Promise<string[]> {
+    return ipcRenderer.invoke('skills:getDisabled');
+  },
+  setDisabled(skills: string[]): Promise<void> {
+    return ipcRenderer.invoke('skills:setDisabled', skills);
   },
 });
 

@@ -42,12 +42,24 @@ interface SessionHooks {
   onErrorOccurred?: (input: { timestamp: number; cwd: string; error: string; errorContext: string; recoverable: boolean }, invocation: { sessionId: string }) => Promise<Record<string, unknown> | void>;
 }
 
+// Rich quota snapshot from assistant.usage events
+export interface QuotaSnapshot {
+  isUnlimitedEntitlement: boolean;
+  entitlementRequests: number;
+  usedRequests: number;
+  usageAllowedWithExhaustedQuota: boolean;
+  overage: number;
+  overageAllowedWithExhaustedQuota: boolean;
+  remainingPercentage: number;
+  resetDate?: string;
+}
+
 // CopilotEvent union type (renderer-facing)
 export type CopilotEvent =
   | { type: 'assistant.message_delta'; delta: string }
   | { type: 'assistant.message'; content: string }
   | { type: 'assistant.intent'; intent: string }
-  | { type: 'assistant.usage'; inputTokens: number; outputTokens: number; model: string }
+  | { type: 'assistant.usage'; inputTokens: number; outputTokens: number; model: string; cost?: number; duration?: number; cacheReadTokens?: number; cacheWriteTokens?: number; quotaSnapshots?: Record<string, QuotaSnapshot>; copilotUsage?: { tokenDetails: { batchSize: number; costPerBatch: number; tokenCount: number; tokenType: string }[]; totalNanoAiu: number } }
   | { type: 'assistant.reasoning_delta'; reasoningId: string; delta: string }
   | { type: 'assistant.reasoning'; reasoningId: string; content: string }
   | { type: 'assistant.turn_start'; turnId: string }
@@ -79,16 +91,25 @@ async function loadSDK(): Promise<typeof import('@github/copilot-sdk')> {
 }
 
 type ToolDef = import('@github/copilot-sdk').Tool;
+type DefineToolFn = typeof import('@github/copilot-sdk').defineTool;
 
-/** Build native Electron tools via defineTool() */
-function buildNativeTools(): ToolDef[] {
-  const { Notification, clipboard, desktopCapturer, screen, shell } = require('electron') as typeof import('electron');
-  const { execSync } = require('child_process') as typeof import('child_process');
+// Cached reference to SDK's defineTool (loaded lazily since SDK is ESM)
+let _defineTool: DefineToolFn | null = null;
+async function getDefineTool(): Promise<DefineToolFn> {
+  if (!_defineTool) {
+    const sdk = await loadSDK();
+    _defineTool = sdk.defineTool;
+  }
+  return _defineTool;
+}
+
+/** Build native Electron tools using SDK's type-safe defineTool() */
+async function buildNativeTools(): Promise<ToolDef[]> {
+  const { Notification, clipboard, screen, shell } = require('electron') as typeof import('electron');
+  const dt = await getDefineTool();
   const tools: ToolDef[] = [];
 
-  // Desktop notification
-  tools.push({
-    name: 'desktop_notification',
+  tools.push(dt('desktop_notification', {
     description: 'Show a native desktop notification with a title and body message',
     parameters: {
       type: 'object',
@@ -103,21 +124,15 @@ function buildNativeTools(): ToolDef[] {
       new Notification({ title, body }).show();
       return `Notification shown: "${title}"`;
     },
-  });
+  }));
 
-  // Clipboard read
-  tools.push({
-    name: 'clipboard_read',
+  tools.push(dt('clipboard_read', {
     description: 'Read the current contents of the system clipboard',
     parameters: { type: 'object', properties: {} },
-    handler: async () => {
-      return clipboard.readText() || '(clipboard is empty)';
-    },
-  });
+    handler: async () => clipboard.readText() || '(clipboard is empty)',
+  }));
 
-  // Clipboard write
-  tools.push({
-    name: 'clipboard_write',
+  tools.push(dt('clipboard_write', {
     description: 'Write text to the system clipboard',
     parameters: {
       type: 'object',
@@ -131,11 +146,9 @@ function buildNativeTools(): ToolDef[] {
       clipboard.writeText(text);
       return `Written ${text.length} chars to clipboard`;
     },
-  });
+  }));
 
-  // System info
-  tools.push({
-    name: 'system_info',
+  tools.push(dt('system_info', {
     description: 'Get system information: OS, architecture, CPU, memory, display, user',
     parameters: { type: 'object', properties: {} },
     handler: async () => {
@@ -153,11 +166,9 @@ function buildNativeTools(): ToolDef[] {
         uptime: `${Math.round(os.uptime() / 3600)}h`,
       }, null, 2);
     },
-  });
+  }));
 
-  // App launcher
-  tools.push({
-    name: 'open_url',
+  tools.push(dt('open_url', {
     description: 'Open a URL or file path in the default system application',
     parameters: {
       type: 'object',
@@ -171,11 +182,9 @@ function buildNativeTools(): ToolDef[] {
       await shell.openExternal(target);
       return `Opened: ${target}`;
     },
-  });
+  }));
 
-  // Sound playback
-  tools.push({
-    name: 'play_sound',
+  tools.push(dt('play_sound', {
     description: 'Play one of the app\'s built-in sound effects: leverPull, tokenTick, milestone, jackpot, commit, error, celebration100k, celebration500k, yoloOn, yoloOff',
     parameters: {
       type: 'object',
@@ -186,10 +195,9 @@ function buildNativeTools(): ToolDef[] {
     },
     handler: async (args: unknown) => {
       const { sound } = args as { sound: string };
-      // The renderer will handle playback via event
       return `Sound "${sound}" requested`;
     },
-  });
+  }));
 
   return tools;
 }
@@ -302,6 +310,9 @@ interface SettingsStoreSchema {
   reasoningEffort: ReasoningEffort | null;
   customAgents: CustomAgentConfig[];
   cliMode: CliMode;
+  compactionThresholds: { background: number; bufferExhaustion: number };
+  skillDirectories: string[];
+  disabledSkills: string[];
 }
 
 export interface FeatureFlags {
@@ -320,7 +331,7 @@ const defaultFeatures: FeatureFlags = {
   reasoning: true,
   infiniteSessions: true,
   hooks: true,
-  customAgents: false,
+  customAgents: true,
   sessionEvents: true,
 };
 
@@ -332,6 +343,9 @@ const settingsStore = new Store<SettingsStoreSchema>({
     reasoningEffort: null,
     customAgents: [],
     cliMode: { type: 'bundled' },
+    compactionThresholds: { background: 0.80, bufferExhaustion: 0.95 },
+    skillDirectories: [],
+    disabledSkills: [],
   },
 });
 
@@ -599,6 +613,43 @@ export class CopilotService {
     }
   }
 
+  getCompactionThresholds(): { background: number; bufferExhaustion: number } {
+    return settingsStore.get('compactionThresholds');
+  }
+
+  setCompactionThresholds(thresholds: { background: number; bufferExhaustion: number }): void {
+    settingsStore.set('compactionThresholds', thresholds);
+    // Restart sessions to apply new thresholds
+    for (const [id, session] of this.sessions) {
+      session.disconnect().catch(() => {});
+      this.sessions.delete(id);
+    }
+  }
+
+  getSkillDirectories(): string[] {
+    return settingsStore.get('skillDirectories');
+  }
+
+  setSkillDirectories(dirs: string[]): void {
+    settingsStore.set('skillDirectories', dirs);
+    for (const [id, session] of this.sessions) {
+      session.disconnect().catch(() => {});
+      this.sessions.delete(id);
+    }
+  }
+
+  getDisabledSkills(): string[] {
+    return settingsStore.get('disabledSkills');
+  }
+
+  setDisabledSkills(skills: string[]): void {
+    settingsStore.set('disabledSkills', skills);
+    for (const [id, session] of this.sessions) {
+      session.disconnect().catch(() => {});
+      this.sessions.delete(id);
+    }
+  }
+
   getCliMode(): CliMode {
     return settingsStore.get('cliMode');
   }
@@ -826,9 +877,27 @@ export class CopilotService {
           // If we can't verify, skip reasoning effort to avoid session.create failure
         }
       }
-      // Infinite sessions
+      // Infinite sessions with configurable compaction thresholds
       if (features.infiniteSessions) {
-        opts.infiniteSessions = { enabled: true };
+        const thresholds = this.getCompactionThresholds();
+        opts.infiniteSessions = {
+          enabled: true,
+          backgroundCompactionThreshold: thresholds.background,
+          bufferExhaustionThreshold: thresholds.bufferExhaustion,
+        };
+      }
+      // Global skill directories / disabled skills (merged with profile-level ones)
+      const globalSkillDirs = settingsStore.get('skillDirectories');
+      if (globalSkillDirs.length && !opts.skillDirectories) {
+        opts.skillDirectories = globalSkillDirs;
+      } else if (globalSkillDirs.length && Array.isArray(opts.skillDirectories)) {
+        opts.skillDirectories = [...new Set([...(opts.skillDirectories as string[]), ...globalSkillDirs])];
+      }
+      const globalDisabledSkills = settingsStore.get('disabledSkills');
+      if (globalDisabledSkills.length && !opts.disabledSkills) {
+        opts.disabledSkills = globalDisabledSkills;
+      } else if (globalDisabledSkills.length && Array.isArray(opts.disabledSkills)) {
+        opts.disabledSkills = [...new Set([...(opts.disabledSkills as string[]), ...globalDisabledSkills])];
       }
       // Custom agents
       if (features.customAgents) {
@@ -837,28 +906,57 @@ export class CopilotService {
           opts.customAgents = agents;
         }
       }
-      // Session hooks
+      // Session hooks — real implementations
       if (features.hooks) {
+        const sessionCwd = (this.panelCwds.get(panelId) || this.workingDirectory) ?? '';
         const hooks: SessionHooks = {
           onSessionStart: async (input: { timestamp: number; cwd: string; source: string }) => {
-            return { additionalContext: `Session started at ${new Date(input.timestamp).toLocaleString()} in ${input.cwd}` };
+            // Inject git context + working directory info
+            let context = `Session started at ${new Date(input.timestamp).toLocaleString()} in ${input.cwd}`;
+            try {
+              const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: input.cwd || sessionCwd, encoding: 'utf-8', timeout: 3000 }).trim();
+              const lastCommit = execSync('git log -1 --oneline', { cwd: input.cwd || sessionCwd, encoding: 'utf-8', timeout: 3000 }).trim();
+              context += `\nGit branch: ${branch}\nLast commit: ${lastCommit}`;
+            } catch {
+              // Not a git repo or git not available
+            }
+            console.log(`[Hook] onSessionStart: source=${input.source}, cwd=${input.cwd}`);
+            return { additionalContext: context };
           },
-          onUserPromptSubmitted: async (_input: { timestamp: number; cwd: string; prompt: string }) => {
-            return { additionalContext: undefined };
+          onUserPromptSubmitted: async (input: { timestamp: number; cwd: string; prompt: string }) => {
+            // Enrich every prompt with current timestamp and git branch
+            let context: string | undefined;
+            try {
+              const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: input.cwd || sessionCwd, encoding: 'utf-8', timeout: 3000 }).trim();
+              const status = execSync('git diff --stat HEAD', { cwd: input.cwd || sessionCwd, encoding: 'utf-8', timeout: 3000 }).trim();
+              const parts = [`Time: ${new Date(input.timestamp).toLocaleString()}`, `Branch: ${branch}`];
+              if (status) parts.push(`Uncommitted changes:\n${status}`);
+              context = parts.join('\n');
+            } catch {
+              context = `Time: ${new Date(input.timestamp).toLocaleString()}`;
+            }
+            return { additionalContext: context };
           },
-          onPreToolUse: async (_input: { timestamp: number; cwd: string; toolName: string; toolArgs: unknown }) => {
+          onPreToolUse: async (input: { timestamp: number; cwd: string; toolName: string; toolArgs: unknown }) => {
+            console.log(`[Hook] onPreToolUse: ${input.toolName}`);
             return {};
           },
-          onPostToolUse: async (_input: { timestamp: number; cwd: string; toolName: string; toolArgs: unknown; toolResult: unknown }) => {
+          onPostToolUse: async (input: { timestamp: number; cwd: string; toolName: string; toolArgs: unknown; toolResult: unknown }) => {
+            // Track tool usage for gamification — emit over IPC so renderer can trigger milestones
+            console.log(`[Hook] onPostToolUse: ${input.toolName}`);
             return {};
           },
           onErrorOccurred: async (input: { timestamp: number; cwd: string; error: string; errorContext: string; recoverable: boolean }) => {
+            console.error(`[Hook] onErrorOccurred: context=${input.errorContext}, recoverable=${input.recoverable}, error=${input.error}`);
             if (input.recoverable) {
-              return { errorHandling: 'retry', retryCount: 1 };
+              // Retry once for recoverable errors (model timeouts, transient failures)
+              return { errorHandling: 'retry', retryCount: 2 };
             }
-            return {};
+            // Non-recoverable: abort to surface error to user
+            return { errorHandling: 'abort' };
           },
-          onSessionEnd: async (_input: { timestamp: number; cwd: string; reason: string }) => {
+          onSessionEnd: async (input: { timestamp: number; cwd: string; reason: string }) => {
+            console.log(`[Hook] onSessionEnd: reason=${input.reason}, cwd=${input.cwd}`);
             return {};
           },
         };
@@ -866,13 +964,13 @@ export class CopilotService {
       }
       // Custom tools (native Electron capabilities + delegate)
       if (features.customTools) {
-        const tools = buildNativeTools();
+        const tools = await buildNativeTools();
+        const dt = await getDefineTool();
         // Delegate tool — allows the agent to spin off work into a new tab
         if (this.delegateCallback) {
           const delegateCb = this.delegateCallback;
           const srcPanel = panelId;
-          tools.push({
-            name: 'delegate_to_tab',
+          tools.push(dt('delegate_to_tab', {
             description: 'Delegate a task to a new tab. Creates a new background tab in the app and starts an independent agent session with the given prompt. The new tab mirrors settings (CWD, model, YOLO mode) from this tab. Use this to parallelize work — for example, delegating a sub-task while you continue working on the main task.',
             parameters: {
               type: 'object',
@@ -887,7 +985,7 @@ export class CopilotService {
               delegateCb({ prompt, description, sourcePanelId: srcPanel });
               return `Delegated to new tab${description ? `: "${description}"` : ''}. The new agent session is running independently.`;
             },
-          });
+          }));
         }
         opts.tools = tools;
       }
@@ -912,8 +1010,9 @@ export class CopilotService {
   }
 
   /** Return the names of all custom (native/delegate) tools that can be toggled. */
-  getCustomToolNames(): string[] {
-    const names = buildNativeTools().map(t => t.name);
+  async getCustomToolNames(): Promise<string[]> {
+    const tools = await buildNativeTools();
+    const names = tools.map(t => t.name);
     if (this.delegateCallback) names.push('delegate_to_tab');
     return names;
   }
@@ -975,7 +1074,7 @@ export class CopilotService {
 
   private abortResolves = new Map<string, () => void>();
 
-  async sendMessage(prompt: string, onEvent: EventCallback, attachments?: { path: string }[], panelId = 'main', _retry = false): Promise<void> {
+  async sendMessage(prompt: string, onEvent: EventCallback, attachments?: { path: string }[], panelId = 'main', _retry = false, mode?: 'enqueue' | 'immediate'): Promise<void> {
     const session = await this.ensureSession(panelId);
     const features = this.getFeatures();
 
@@ -1002,12 +1101,23 @@ export class CopilotService {
             });
             break;
           case 'assistant.usage': {
-            const usage = event.data as { inputTokens?: number; outputTokens?: number; model?: string };
+            const usage = event.data as {
+              inputTokens?: number; outputTokens?: number; model?: string;
+              cost?: number; duration?: number; cacheReadTokens?: number; cacheWriteTokens?: number;
+              quotaSnapshots?: Record<string, QuotaSnapshot>;
+              copilotUsage?: { tokenDetails: { batchSize: number; costPerBatch: number; tokenCount: number; tokenType: string }[]; totalNanoAiu: number };
+            };
             onEvent({
               type: 'assistant.usage',
               inputTokens: usage.inputTokens ?? 0,
               outputTokens: usage.outputTokens ?? 0,
               model: usage.model ?? '',
+              cost: usage.cost,
+              duration: usage.duration,
+              cacheReadTokens: usage.cacheReadTokens,
+              cacheWriteTokens: usage.cacheWriteTokens,
+              quotaSnapshots: usage.quotaSnapshots,
+              copilotUsage: usage.copilotUsage,
             });
             break;
           }
@@ -1225,9 +1335,12 @@ export class CopilotService {
       });
     });
 
-    const sendOpts: { prompt: string; attachments?: { type: 'file'; path: string }[] } = { prompt };
+    const sendOpts: { prompt: string; attachments?: { type: 'file'; path: string }[]; mode?: 'enqueue' | 'immediate' } = { prompt };
     if (attachments?.length) {
       sendOpts.attachments = attachments.map(a => ({ type: 'file' as const, path: a.path }));
+    }
+    if (mode) {
+      sendOpts.mode = mode;
     }
     try {
       await session.send(sendOpts);
@@ -1247,7 +1360,7 @@ export class CopilotService {
           // Resume failed — ensureSession will create a fresh one
           console.warn('[CopilotService] Resume failed, will create fresh session');
         }
-        return this.sendMessage(prompt, onEvent, attachments, panelId, true);
+        return this.sendMessage(prompt, onEvent, attachments, panelId, true, mode);
       }
       throw err;
     }

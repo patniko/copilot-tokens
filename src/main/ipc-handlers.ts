@@ -106,12 +106,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return permissions.yoloMode;
   });
 
-  ipcMain.handle('copilot:sendMessage', async (_event, prompt: string, attachments?: { path: string }[], panelId?: string) => {
+  ipcMain.handle('copilot:sendMessage', async (_event, prompt: string, attachments?: { path: string }[], panelId?: string, mode?: 'enqueue' | 'immediate') => {
     const pid = panelId || 'main';
     try {
       await copilot.sendMessage(prompt, (event) => {
         mainWindow.webContents.send(`copilot:event:${pid}`, event);
-      }, attachments, pid);
+      }, attachments, pid, false, mode);
     } catch (err) {
       console.error('[IPC] copilot:sendMessage error:', err);
       mainWindow.webContents.send(`copilot:event:${pid}`, { type: 'session.idle' });
@@ -551,6 +551,34 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('agents:set', (_event, agents: { name: string; displayName?: string; description?: string; tools?: string[] | null; prompt: string }[]) => {
     copilot.setCustomAgents(agents as import('@github/copilot-sdk').CustomAgentConfig[]);
+  });
+
+  // ── Compaction Thresholds ──
+
+  ipcMain.handle('compaction:get', () => {
+    return copilot.getCompactionThresholds();
+  });
+
+  ipcMain.handle('compaction:set', (_event, thresholds: { background: number; bufferExhaustion: number }) => {
+    copilot.setCompactionThresholds(thresholds);
+  });
+
+  // ── Skill Management ──
+
+  ipcMain.handle('skills:getDirectories', () => {
+    return copilot.getSkillDirectories();
+  });
+
+  ipcMain.handle('skills:setDirectories', (_event, dirs: string[]) => {
+    copilot.setSkillDirectories(dirs);
+  });
+
+  ipcMain.handle('skills:getDisabled', () => {
+    return copilot.getDisabledSkills();
+  });
+
+  ipcMain.handle('skills:setDisabled', (_event, skills: string[]) => {
+    copilot.setDisabledSkills(skills);
   });
 
   // ── Ask User (user input request/response bridge) ──
