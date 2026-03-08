@@ -4,7 +4,7 @@ import SqlTile from '../components/tiles/SqlTile';
 import MemoryTile from '../components/tiles/MemoryTile';
 import SubagentTile from '../components/tiles/SubagentTile';
 import SkillTile from '../components/tiles/SkillTile';
-import { NotificationTile, ClipboardTile, SystemInfoTile, OpenUrlTile, SoundTile } from '../components/tiles/NativeToolTiles';
+import { NotificationTile, ClipboardTile, SystemInfoTile, OpenUrlTile, SoundTile, CelebrateTile } from '../components/tiles/NativeToolTiles';
 
 /** Register all custom tile renderers for specific tool names */
 export function registerBuiltinTiles(): void {
@@ -19,4 +19,5 @@ export function registerBuiltinTiles(): void {
   registerTile('system_info', SystemInfoTile);
   registerTile('open_url', OpenUrlTile);
   registerTile('play_sound', SoundTile);
+  registerTile('celebrate', CelebrateTile);
 }

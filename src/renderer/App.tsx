@@ -937,6 +937,24 @@ export default function App() {
     });
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // --- Celebrate tool: agent fires celebration overlays ---
+  useEffect(() => {
+    if (!window.copilotAPI?.onCelebrate) return;
+    return window.copilotAPI.onCelebrate((data) => {
+      const validEffects = ['sparkle', 'banner', 'confetti', 'jackpot', 'mega'];
+      const validSounds = ['milestone', 'jackpot', 'celebration100k', 'celebration500k'];
+      // Emit as a Badge-shaped object (no threshold → won't collide with metric milestones)
+      partyBus.emit(PartyEvents.MILESTONE_TRIGGERED, {
+        id: `agent-celebrate-${Date.now()}`,
+        label: data.message,
+        emoji: data.emoji,
+        effect: validEffects.includes(data.effect) ? data.effect : 'confetti',
+        sound: validSounds.includes(data.sound) ? data.sound : 'milestone',
+        description: 'Agent celebration',
+      });
+    });
+  }, []);
+
   // --- Tool toggle dropdown state ---
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState<string[]>([]);

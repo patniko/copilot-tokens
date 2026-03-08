@@ -23,6 +23,7 @@ interface CopilotAPI {
   getExcludedTools(panelId: string): Promise<string[]>;
   getCustomToolNames(): Promise<string[]>;
   onDelegateTab(callback: (data: { prompt: string; description?: string; sourcePanelId: string }) => void): () => void;
+  onCelebrate(callback: (data: { message: string; emoji: string; effect: string; sound: string }) => void): () => void;
 }
 
 interface StatsAPI {

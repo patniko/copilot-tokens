@@ -40,4 +40,6 @@ export const PartyEvents = {
   PACK_ACTIVATED: 'pack:activated',
   // Leveling
   LEVEL_UP: 'level:up',
+  // Agent celebrate tool
+  AGENT_CELEBRATE: 'agent:celebrate',
 } as const;
