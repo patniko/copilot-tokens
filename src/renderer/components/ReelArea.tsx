@@ -281,6 +281,24 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
             if (intentText) setIntent(intentText);
             break;
           }
+          // ask_user: render as interactive AskUserTile instead of generic tool tile
+          if (event.toolName === 'ask_user') {
+            const question = String(event.args.question ?? '');
+            const choices = Array.isArray(event.args.choices) ? event.args.choices.map(String) : undefined;
+            const allowFreeform = event.args.allow_freeform !== false && event.args.allowFreeform !== false;
+            const msg: AskUserMessage = {
+              id: generateId(),
+              type: 'ask_user',
+              question,
+              choices,
+              allowFreeform,
+              responded: false,
+              timestamp: Date.now(),
+            };
+            setMessages((prev) => [...prev, msg]);
+            currentAssistantIdRef.current = null;
+            break;
+          }
           // Skip other hidden tools
           if (HIDDEN_TOOLS.has(event.toolName)) break;
           const tt = toolTypeFromName(event.toolName);
@@ -603,23 +621,6 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
 
     return unsubscribe;
   }, [onUsage, panelId]);
-
-  // Listen for SDK ask_user requests (only on main panel to avoid duplicates)
-  useEffect(() => {
-    if (!window.copilotAPI?.onAskUserRequest || panelId !== 'main') return;
-    return window.copilotAPI.onAskUserRequest((request) => {
-      const msg: AskUserMessage = {
-        id: generateId(),
-        type: 'ask_user',
-        question: request.question,
-        choices: request.choices,
-        allowFreeform: request.allowFreeform,
-        responded: false,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, msg]);
-    });
-  }, [panelId]);
 
   // Elapsed time timer while generating
   useEffect(() => {
