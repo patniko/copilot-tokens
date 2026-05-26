@@ -14,6 +14,7 @@ type CopilotClientType = import('@github/copilot-sdk').CopilotClient;
 type CopilotSessionType = import('@github/copilot-sdk').CopilotSession;
 type MCPServerConfig = import('@github/copilot-sdk').MCPServerConfig;
 type CustomAgentConfig = import('@github/copilot-sdk').CustomAgentConfig;
+type RuntimeConnectionType = import('@github/copilot-sdk').RuntimeConnection;
 
 // These types exist in the SDK but aren't re-exported from the index
 type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
@@ -373,9 +374,7 @@ if (settingsStore.get('reasoningEffort') === 'medium') {
 function buildProviderConfig(conn: ProfileConnection): Record<string, unknown> | null {
   switch (conn.type) {
     case 'anthropic':
-      // Use OpenAI-compatible endpoint — Anthropic supports /v1/chat/completions
-      // and the CLI doesn't natively implement the Anthropic /v1/messages protocol.
-      return { type: 'openai', baseUrl: 'https://api.anthropic.com/v1/', apiKey: conn.apiKey };
+      return { type: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', apiKey: conn.apiKey };
     case 'openai':
       return { type: 'openai', baseUrl: conn.baseUrl || 'https://api.openai.com/v1', apiKey: conn.apiKey };
     case 'azure':
@@ -703,7 +702,7 @@ export class CopilotService {
     return {
       enabled: config.enabled,
       port: config.port,
-      state: this.client?.getState() ?? 'disconnected',
+      state: this.started ? 'connected' : 'disconnected',
       externalSessionCount: this.externalSessionCount,
     };
   }
@@ -881,57 +880,63 @@ export class CopilotService {
 
   async ensureStarted(): Promise<void> {
     if (!this.started) {
-      const { CopilotClient } = await loadSDK();
-      const opts: Record<string, unknown> = { autoStart: false };
-
-      // Server mode: use TCP with a fixed port so external clients can connect
-      const serverConfig = this.getServerModeConfig();
-      if (serverConfig.enabled) {
-        opts.port = serverConfig.port;
-        opts.useStdio = false;
-        console.log(`[CopilotService] Server mode: starting runtime on TCP port ${serverConfig.port}`);
-      }
+      const { CopilotClient, RuntimeConnection } = await loadSDK();
+      const opts: Record<string, unknown> = {};
 
       // Derive CLI backend from active profile's connection type
       const profile = getActiveProfile();
       const conn = profile.connection;
+      const serverConfig = this.getServerModeConfig();
 
-      if (conn.type === 'copilot-remote') {
-        opts.cliUrl = conn.url;
-        console.log('[CopilotService] Using remote CLI at', conn.url);
-      } else if (conn.type === 'copilot-cli' && conn.cliMode === 'installed') {
-        const systemPath = resolveSystemCli();
-        if (systemPath) {
-          opts.cliPath = systemPath;
-          console.log('[CopilotService] Using installed CLI at', systemPath);
+      // Resolve CLI path for local runtimes
+      let cliPath = '';
+      if (conn.type !== 'copilot-remote') {
+        if (conn.type === 'copilot-cli' && conn.cliMode === 'installed') {
+          cliPath = resolveSystemCli();
+          if (cliPath) {
+            console.log('[CopilotService] Using installed CLI at', cliPath);
+          } else {
+            console.warn('[CopilotService] No system CLI found, falling back to bundled');
+            cliPath = resolveBundledCliPath();
+            console.log('[CopilotService] Resolved bundled CLI path:', cliPath || '(SDK default)');
+          }
         } else {
-          console.warn('[CopilotService] No system CLI found, falling back to bundled');
-          const cliPath = resolveBundledCliPath();
-          if (cliPath) opts.cliPath = cliPath;
+          cliPath = resolveBundledCliPath();
           console.log('[CopilotService] Resolved bundled CLI path:', cliPath || '(SDK default)');
         }
+      }
+
+      // Build RuntimeConnection based on mode
+      if (conn.type === 'copilot-remote') {
+        opts.connection = RuntimeConnection.forUri(conn.url);
+        console.log('[CopilotService] Using remote CLI at', conn.url);
+      } else if (serverConfig.enabled) {
+        opts.connection = RuntimeConnection.forTcp({
+          port: serverConfig.port,
+          ...(cliPath ? { path: cliPath } : {}),
+        });
+        console.log(`[CopilotService] Server mode: starting runtime on TCP port ${serverConfig.port}`);
       } else {
-        // 'copilot-cli' bundled, or BYOK profiles (still use bundled CLI as backend)
-        const cliPath = resolveBundledCliPath();
-        if (cliPath) opts.cliPath = cliPath;
-        console.log('[CopilotService] Resolved bundled CLI path:', cliPath || '(SDK default)');
+        opts.connection = RuntimeConnection.forStdio(cliPath ? { path: cliPath } : undefined);
       }
 
       // When using a bundled .js CLI in packaged Electron, process.execPath is
       // the Electron binary. ELECTRON_RUN_AS_NODE makes it behave as plain Node.
       // Not needed for the native platform binary (no .js extension).
-      const resolvedPath = opts.cliPath as string | undefined;
-      if (app.isPackaged && resolvedPath?.endsWith('.js')) {
+      if (app.isPackaged && cliPath.endsWith('.js')) {
         opts.env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
       }
 
-      // Auth token: prefer profile's oauthToken, then fall back to global OAuth
-      if (profile.oauthToken) {
-        opts.githubToken = profile.oauthToken;
-      } else if (profile.authSource === 'oauth' || getActiveSource() === 'oauth') {
-        const token = getPersistedOAuthToken();
-        if (token) {
-          opts.githubToken = token;
+      // Auth token: prefer profile's oauthToken, then fall back to global OAuth.
+      // Only set for spawned runtimes (forUri connects to an externally-authed runtime).
+      if (conn.type !== 'copilot-remote') {
+        if (profile.oauthToken) {
+          opts.gitHubToken = profile.oauthToken;
+        } else if (profile.authSource === 'oauth' || getActiveSource() === 'oauth') {
+          const token = getPersistedOAuthToken();
+          if (token) {
+            opts.gitHubToken = token;
+          }
         }
       }
 
@@ -943,12 +948,10 @@ export class CopilotService {
         // If the port is already in use, connect as a secondary client instead of spawning
         if (serverConfig.enabled && msg.includes('EADDRINUSE')) {
           console.log(`[CopilotService] Port ${serverConfig.port} in use, connecting as secondary client`);
-          const { CopilotClient: FreshClient } = await loadSDK();
+          const { CopilotClient: FreshClient, RuntimeConnection: RT } = await loadSDK();
           const fallbackOpts: Record<string, unknown> = {
-            cliUrl: `localhost:${serverConfig.port}`,
-            autoStart: false,
+            connection: RT.forUri(`localhost:${serverConfig.port}`),
           };
-          if (opts.githubToken) fallbackOpts.githubToken = opts.githubToken;
           if (opts.logLevel) fallbackOpts.logLevel = opts.logLevel;
           this.client = new FreshClient(fallbackOpts as ConstructorParameters<typeof CopilotClient>[0]);
           await this.client.start();
@@ -1360,7 +1363,7 @@ export class CopilotService {
       this.sessions.delete(panelId);
       try {
         const opts = this.buildResumeOpts(panelId);
-        opts.disableResume = true;
+        opts.suppressResumeEvent = true;
         const resumed = await this.client!.resumeSession(sid, opts as Parameters<CopilotClientType['resumeSession']>[1]);
         this.sessions.set(panelId, resumed);
       } catch {
@@ -1391,7 +1394,7 @@ export class CopilotService {
   /** Subscribe to session lifecycle events to track external clients connecting to our runtime. */
   private subscribeToLifecycleEvents(): void {
     if (!this.client || this.lifecycleUnsub) return;
-    this.lifecycleUnsub = this.client.on((event: { type: string; sessionId?: string }) => {
+    this.lifecycleUnsub = this.client.onLifecycle((event: { type: string; sessionId?: string }) => {
       if (!event.sessionId) return;
       if (event.type === 'session.created' && !this.ownSessionIds.has(event.sessionId)) {
         this.externalSessionCount++;

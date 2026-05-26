@@ -15,7 +15,6 @@ export function createMockSession(overrides?: Record<string, unknown>) {
     registerHooks: vi.fn(),
     getMessages: vi.fn().mockResolvedValue([]),
     disconnect: vi.fn().mockResolvedValue(undefined),
-    destroy: vi.fn().mockResolvedValue(undefined),
     abort: vi.fn().mockResolvedValue(undefined),
     setModel: vi.fn().mockResolvedValue(undefined),
     _dispatchEvent: vi.fn(),
@@ -48,6 +47,7 @@ export function createMockClient(overrides?: Record<string, unknown>) {
     getForegroundSessionId: vi.fn().mockResolvedValue(undefined),
     setForegroundSessionId: vi.fn().mockResolvedValue(undefined),
     on: vi.fn().mockReturnValue(() => {}),
+    onLifecycle: vi.fn().mockReturnValue(() => {}),
     rpc: {},
     _mockSession: mockSession,
     ...overrides,
@@ -63,6 +63,13 @@ export const mockDefineTool = vi.fn((name: string, config: Record<string, unknow
 /** Mock for the approveAll function */
 export const mockApproveAll = vi.fn().mockReturnValue('allow');
 
+/** Mock for the RuntimeConnection factory */
+export const mockRuntimeConnection = {
+  forStdio: vi.fn((opts?: Record<string, unknown>) => ({ kind: 'stdio' as const, ...opts })),
+  forTcp: vi.fn((opts?: Record<string, unknown>) => ({ kind: 'tcp' as const, ...opts })),
+  forUri: vi.fn((url: string, opts?: Record<string, unknown>) => ({ kind: 'uri' as const, url, ...opts })),
+};
+
 /** Full SDK module mock - use with vi.mock('@github/copilot-sdk', () => sdkModuleMock) */
 export function createSdkModuleMock(clientOverrides?: Record<string, unknown>) {
   const client = createMockClient(clientOverrides);
@@ -72,6 +79,7 @@ export function createSdkModuleMock(clientOverrides?: Record<string, unknown>) {
   return {
     CopilotClient: MockCopilotClient,
     CopilotSession: MockCopilotSession,
+    RuntimeConnection: mockRuntimeConnection,
     defineTool: mockDefineTool,
     approveAll: mockApproveAll,
     _mockClient: client,

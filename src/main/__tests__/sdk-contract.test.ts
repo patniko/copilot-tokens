@@ -32,16 +32,21 @@ function readSdkFile(relativePath: string): string {
 // ===========================================================================
 
 describe('SDK version', () => {
-  it('should be the expected version (0.1.32)', () => {
+  it('should be the expected version (1.0.0-beta.8)', () => {
     const pkg = JSON.parse(readSdkFile('package.json'));
-    expect(pkg.version).toBe('0.1.32');
+    expect(pkg.version).toBe('1.0.0-beta.8');
   });
 
-  it('should have ESM exports in package.json', () => {
+  it('should have ESM and CJS exports in package.json', () => {
     const pkg = JSON.parse(readSdkFile('package.json'));
-    expect(pkg.exports['.']).toEqual(expect.objectContaining({
-      import: expect.stringContaining('index.js'),
+    const root = pkg.exports['.'];
+    expect(root.import).toEqual(expect.objectContaining({
       types: expect.stringContaining('index.d.ts'),
+      default: expect.stringContaining('index.js'),
+    }));
+    expect(root.require).toEqual(expect.objectContaining({
+      types: expect.stringContaining('index.d.ts'),
+      default: expect.stringContaining('index.js'),
     }));
   });
 
@@ -80,16 +85,17 @@ describe('SDK module exports', () => {
 
   // Verify ALL expected type exports exist
   const expectedTypeExports = [
-    'ConnectionState', 'CopilotClientOptions', 'CustomAgentConfig',
+    'CopilotClientOptions', 'CustomAgentConfig',
     'ForegroundSessionInfo', 'GetAuthStatusResponse', 'GetStatusResponse',
-    'InfiniteSessionConfig', 'MCPLocalServerConfig', 'MCPRemoteServerConfig',
+    'InfiniteSessionConfig', 'MCPStdioServerConfig', 'MCPHTTPServerConfig',
     'MCPServerConfig', 'MessageOptions', 'ModelBilling', 'ModelCapabilities',
     'ModelInfo', 'ModelPolicy', 'PermissionHandler', 'PermissionRequest',
-    'PermissionRequestResult', 'ResumeSessionConfig', 'SessionConfig',
-    'SessionContext', 'SessionEvent', 'SessionEventHandler', 'SessionEventPayload',
-    'SessionEventType', 'SessionLifecycleEvent', 'SessionLifecycleEventType',
-    'SessionLifecycleHandler', 'SessionListFilter', 'SessionMetadata',
-    'SystemMessageAppendConfig', 'SystemMessageConfig', 'SystemMessageReplaceConfig',
+    'PermissionRequestResult', 'ResumeSessionConfig', 'RuntimeConnection',
+    'SessionConfig', 'SessionContext', 'SessionEvent', 'SessionEventHandler',
+    'SessionEventPayload', 'SessionEventType', 'SessionLifecycleEvent',
+    'SessionLifecycleEventType', 'SessionLifecycleHandler', 'SessionListFilter',
+    'SessionMetadata', 'SystemMessageAppendConfig', 'SystemMessageConfig',
+    'SystemMessageCustomizeConfig', 'SystemMessageReplaceConfig',
     'Tool', 'ToolHandler', 'ToolInvocation', 'ToolResultObject',
     'TypedSessionEventHandler', 'TypedSessionLifecycleHandler', 'ZodSchema',
   ];
@@ -114,9 +120,9 @@ describe('CopilotClient class shape', () => {
 
   const expectedMethods = [
     'start', 'stop', 'forceStop', 'createSession', 'resumeSession',
-    'getState', 'ping', 'getStatus', 'getAuthStatus', 'listModels',
+    'ping', 'getStatus', 'getAuthStatus', 'listModels',
     'getLastSessionId', 'deleteSession', 'listSessions',
-    'getForegroundSessionId', 'setForegroundSessionId', 'on',
+    'getForegroundSessionId', 'setForegroundSessionId', 'onLifecycle',
   ];
 
   for (const method of expectedMethods) {
@@ -138,10 +144,6 @@ describe('CopilotClient class shape', () => {
     expect(clientDts).toMatch(/resumeSession.*Promise<CopilotSession>/);
   });
 
-  it('should return ConnectionState from getState', () => {
-    expect(clientDts).toMatch(/getState\(\).*ConnectionState/);
-  });
-
   it('should return ModelInfo[] from listModels', () => {
     expect(clientDts).toMatch(/listModels\(\).*Promise<ModelInfo\[\]>/);
   });
@@ -159,9 +161,7 @@ describe('CopilotSession class shape', () => {
   });
 
   const expectedMethods = [
-    'send', 'sendAndWait', 'on', 'registerTools', 'getToolHandler',
-    'registerPermissionHandler', 'registerUserInputHandler', 'registerHooks',
-    'getMessages', 'disconnect', 'destroy', 'abort', 'setModel',
+    'send', 'sendAndWait', 'on', 'disconnect', 'abort', 'setModel',
   ];
 
   for (const method of expectedMethods) {
@@ -179,12 +179,15 @@ describe('CopilotSession class shape', () => {
     expect(sessionDts).toMatch(/get\s+workspacePath\(\)/);
   });
 
-  it('should accept MessageOptions in send()', () => {
+  it('should accept string or MessageOptions in send()', () => {
+    expect(sessionDts).toMatch(/send\(prompt:\s*string\)/);
     expect(sessionDts).toMatch(/send\(options:\s*MessageOptions\)/);
   });
 
-  it('should accept Tool[] in registerTools()', () => {
-    expect(sessionDts).toMatch(/registerTools\(tools\?:\s*Tool\[\]\)/);
+  it('should accept Tool[] in registerTools() via rpc or config', () => {
+    // Tools are now registered via session config or rpc, not a direct method
+    const typesDts = readSdkFile('dist/types.d.ts');
+    expect(typesDts).toMatch(/tools\??:\s*Tool/);
   });
 });
 
@@ -213,8 +216,9 @@ describe('SDK type definitions', () => {
     expect(typesDts).toMatch(/hooks\??:/);
   });
 
-  it('should define PermissionRequest interface', () => {
-    expect(typesDts).toContain('interface PermissionRequest');
+  it('should define PermissionRequest type', () => {
+    const combined = typesDts + readSdkFile('dist/generated/session-events.d.ts');
+    expect(combined).toContain('PermissionRequest');
   });
 
   it('should define Tool interface with name, description, handler', () => {
@@ -224,14 +228,17 @@ describe('SDK type definitions', () => {
     expect(typesDts).toMatch(/handler:/);
   });
 
-  it('should define MCPServerConfig as union of local and remote', () => {
-    expect(typesDts).toContain('MCPLocalServerConfig');
-    expect(typesDts).toContain('MCPRemoteServerConfig');
-    expect(typesDts).toMatch(/type MCPServerConfig\s*=\s*MCPLocalServerConfig\s*\|\s*MCPRemoteServerConfig/);
+  it('should define MCPServerConfig as union of stdio and HTTP', () => {
+    expect(typesDts).toContain('MCPStdioServerConfig');
+    expect(typesDts).toContain('MCPHTTPServerConfig');
+    expect(typesDts).toMatch(/type MCPServerConfig\s*=\s*MCPStdioServerConfig\s*\|\s*MCPHTTPServerConfig/);
   });
 
-  it('should define ConnectionState with expected values', () => {
-    expect(typesDts).toMatch(/type ConnectionState\s*=\s*"disconnected"\s*\|\s*"connecting"\s*\|\s*"connected"\s*\|\s*"error"/);
+  it('should define RuntimeConnection factory', () => {
+    expect(typesDts).toContain('RuntimeConnection');
+    expect(typesDts).toContain('StdioRuntimeConnection');
+    expect(typesDts).toContain('TcpRuntimeConnection');
+    expect(typesDts).toContain('UriRuntimeConnection');
   });
 
   it('should define ReasoningEffort with expected values', () => {
@@ -326,8 +333,12 @@ describe('compile-time type compatibility', () => {
       tools?: unknown[];
     } ? true : false;
 
-    // --- ConnectionState must include the values CopilotService checks ---
-    type _ConnectionStateCheck = 'connected' extends import('@github/copilot-sdk').ConnectionState ? true : false;
+    // --- RuntimeConnection factory should be available ---
+    type _RuntimeConnectionCheck = import('@github/copilot-sdk').RuntimeConnection extends
+      | { readonly kind: 'stdio' }
+      | { readonly kind: 'tcp' }
+      | { readonly kind: 'uri' }
+      ? true : false;
 
     // Note: ReasoningEffort is defined in types.d.ts but not re-exported from index.
     // The app defines its own ReasoningEffort type locally in copilot-service.ts.
