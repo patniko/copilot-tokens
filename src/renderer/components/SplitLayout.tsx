@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import ReelArea from './ReelArea';
 import PromptBar from './PromptBar';
+import SubagentBar from './SubagentBar';
+import SubagentDetailOverlay from './SubagentDetailOverlay';
 import type { PermissionRequestData, PermissionDecision } from './PermissionDialog';
 
 export interface PanelData {
@@ -30,6 +32,8 @@ interface ChatPanelProps {
 }
 
 function ChatPanel({ panelId, userPrompt, initialEvents, onUsage, onSend, cwd, onBrowseCwd, permissionRequest, onPermissionRespond, resetKey, showClose, onClose, onNewSession, onLoadSession, onSplitSession, onBadge }: ChatPanelProps) {
+  const [detailAgentId, setDetailAgentId] = useState<string | null>(null);
+
   return (
     <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
       {showClose && (
@@ -46,8 +50,19 @@ function ChatPanel({ panelId, userPrompt, initialEvents, onUsage, onSend, cwd, o
           </button>
         </div>
       )}
-      <ReelArea key={resetKey} panelId={panelId} userPrompt={userPrompt} initialEvents={initialEvents} onUsage={onUsage} permissionRequest={permissionRequest} onPermissionRespond={onPermissionRespond} />
+      <ReelArea
+        key={resetKey}
+        panelId={panelId}
+        userPrompt={userPrompt}
+        initialEvents={initialEvents}
+        onUsage={onUsage}
+        permissionRequest={permissionRequest}
+        onPermissionRespond={onPermissionRespond}
+        onOpenSubagentDetail={setDetailAgentId}
+      />
+      <SubagentBar panelId={panelId} onOpenDetail={setDetailAgentId} />
       <PromptBar panelId={panelId} onSend={onSend} cwd={cwd} onBrowseCwd={onBrowseCwd} onNewSession={onNewSession} onLoadSession={onLoadSession} onSplitSession={onSplitSession} onBadge={onBadge} />
+      <SubagentDetailOverlay panelId={panelId} agentId={detailAgentId} onClose={() => setDetailAgentId(null)} />
     </div>
   );
 }

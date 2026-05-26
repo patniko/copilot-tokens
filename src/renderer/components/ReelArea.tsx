@@ -42,6 +42,7 @@ interface ReelAreaProps {
   onUsage?: (input: number, output: number) => void;
   permissionRequest?: PermissionRequestData | null;
   onPermissionRespond?: (decision: PermissionDecision) => void;
+  onOpenSubagentDetail?: (agentId: string) => void;
 }
 
 function generateId(): string {
@@ -86,7 +87,7 @@ function toolTitleFromArgs(toolName: string, toolType: ToolCallMessage['toolType
 }
 
 
-export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMessage, onUsage, permissionRequest, onPermissionRespond }: ReelAreaProps) {
+export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMessage, onUsage, permissionRequest, onPermissionRespond, onOpenSubagentDetail }: ReelAreaProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [intent, setIntent] = useState<string | null>(null);
   const [isWaiting, setIsWaiting] = useState(false);
@@ -369,7 +370,16 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
             type: 'tool_call',
             toolType: 'generic',
             title: `🤖 ${event.displayName}: ${event.description}`,
-            data: { name: event.name, completed: false },
+            data: {
+              name: event.name,
+              displayName: event.displayName,
+              description: event.description,
+              agentId: event.agentId,
+              agentType: event.name,
+              _panelId: panelId || 'main',
+              _toolName: 'task',
+              completed: false,
+            },
             toolCallId: event.toolCallId,
             timestamp: Date.now(),
           };
@@ -381,7 +391,19 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
           setMessages((prev) =>
             prev.map((m) =>
               m.type === 'tool_call' && m.toolCallId === event.toolCallId
-                ? { ...m, data: { ...m.data, completed: true, success: true } }
+                ? {
+                    ...m,
+                    data: {
+                      ...m.data,
+                      completed: true,
+                      success: true,
+                      agentId: event.agentId ?? m.data.agentId,
+                      durationMs: event.durationMs,
+                      model: event.model,
+                      totalTokens: event.totalTokens,
+                      totalToolCalls: event.totalToolCalls,
+                    },
+                  }
                 : m,
             ),
           );
@@ -392,7 +414,16 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
           setMessages((prev) =>
             prev.map((m) =>
               m.type === 'tool_call' && m.toolCallId === event.toolCallId
-                ? { ...m, data: { ...m.data, completed: true, success: false, error: event.error } }
+                ? {
+                    ...m,
+                    data: {
+                      ...m.data,
+                      completed: true,
+                      success: false,
+                      error: event.error,
+                      agentId: event.agentId ?? m.data.agentId,
+                    },
+                  }
                 : m,
             ),
           );
@@ -684,6 +715,9 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
                   const toolName = msg.data._toolName as string | undefined;
                   const CustomTile = toolName ? getTileRenderer(toolName) : undefined;
                   if (CustomTile) {
+                    const extraProps = toolName === 'task' && onOpenSubagentDetail
+                      ? { onOpenDetail: onOpenSubagentDetail }
+                      : {};
                     return (
                       <CustomTile
                         title={msg.title}
@@ -692,6 +726,7 @@ export default function ReelArea({ panelId, userPrompt, initialEvents, onUserMes
                         success={typeof msg.data.success === 'boolean' ? (msg.data.success as boolean) : undefined}
                         error={msg.data.error ? String(msg.data.error) : undefined}
                         progress={msg.data.progress ? String(msg.data.progress) : undefined}
+                        {...extraProps}
                       />
                     );
                   }

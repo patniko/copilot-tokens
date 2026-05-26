@@ -151,6 +151,85 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return copilot.getCustomToolNames();
   });
 
+  // --- Sub-agent tracking & steering ---
+  const subagentTracker = copilot.subagentTracker;
+
+  // Push change notifications to renderer (panel-scoped)
+  subagentTracker.onChange((panelId) => {
+    mainWindow.webContents.send(`subagent:changed:${panelId}`);
+  });
+
+  ipcMain.handle('subagent:list', (_event, panelId: string) => {
+    return subagentTracker.listSubagents(panelId);
+  });
+
+  ipcMain.handle('subagent:read', (_event, panelId: string, agentId: string) => {
+    return subagentTracker.getSubagent(panelId, agentId) ?? null;
+  });
+
+  ipcMain.handle('subagent:write', async (_event, panelId: string, agentId: string, message: string) => {
+    try {
+      const session = copilot.getSession(panelId);
+      if (session) {
+        // Call runtime RPC directly via the underlying JSON-RPC connection
+        const connection = (session as unknown as { connection: { sendRequest: (method: string, params: unknown) => Promise<unknown> } }).connection;
+        if (connection?.sendRequest) {
+          const result = await connection.sendRequest('session.subagent.write', {
+            sessionId: session.sessionId,
+            agentId,
+            message,
+          });
+          return { success: true, result };
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[IPC] subagent:write RPC failed:', msg);
+      return { success: false, error: msg };
+    }
+    return { success: false, error: 'No active session' };
+  });
+
+  ipcMain.handle('subagent:cancel', async (_event, panelId: string, agentId: string) => {
+    try {
+      const session = copilot.getSession(panelId);
+      if (session) {
+        const connection = (session as unknown as { connection: { sendRequest: (method: string, params: unknown) => Promise<unknown> } }).connection;
+        if (connection?.sendRequest) {
+          const result = await connection.sendRequest('session.subagent.cancel', {
+            sessionId: session.sessionId,
+            agentId,
+          });
+          return { success: true, result };
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[IPC] subagent:cancel RPC failed:', msg);
+      return { success: false, error: msg };
+    }
+    return { success: false, error: 'No active session' };
+  });
+
+  ipcMain.handle('subagent:capabilities', async (_event, panelId?: string) => {
+    // Probe runtime for sub-agent RPC support by checking if the connection responds
+    const pid = panelId || 'main';
+    try {
+      const session = copilot.getSession(pid);
+      if (session) {
+        const connection = (session as unknown as { connection: { sendRequest: (method: string, params: unknown) => Promise<unknown> } }).connection;
+        if (connection?.sendRequest) {
+          // Try listing sub-agents — if this doesn't throw, the runtime supports sub-agent RPCs
+          await connection.sendRequest('session.subagent.list', { sessionId: session.sessionId });
+          return { canWrite: true, canCancel: true };
+        }
+      }
+    } catch {
+      // RPC not supported — fall back to false
+    }
+    return { canWrite: false, canCancel: false };
+  });
+
   ipcMain.handle('stats:getTopSessions', (_event, limit: number) => {
     return stats.getTopSessions(limit);
   });

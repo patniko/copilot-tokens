@@ -88,6 +88,30 @@ contextBridge.exposeInMainWorld('copilotAPI', {
   },
 });
 
+contextBridge.exposeInMainWorld('subagentAPI', {
+  list(panelId: string): Promise<unknown[]> {
+    return ipcRenderer.invoke('subagent:list', panelId);
+  },
+  read(panelId: string, agentId: string): Promise<unknown | null> {
+    return ipcRenderer.invoke('subagent:read', panelId, agentId);
+  },
+  write(panelId: string, agentId: string, message: string): Promise<{ success: boolean; error?: string }> {
+    return ipcRenderer.invoke('subagent:write', panelId, agentId, message);
+  },
+  cancel(panelId: string, agentId: string): Promise<{ success: boolean; error?: string }> {
+    return ipcRenderer.invoke('subagent:cancel', panelId, agentId);
+  },
+  capabilities(panelId?: string): Promise<{ canWrite: boolean; canCancel: boolean }> {
+    return ipcRenderer.invoke('subagent:capabilities', panelId);
+  },
+  onChanged(callback: () => void, panelId: string): () => void {
+    const channel = `subagent:changed:${panelId}`;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+});
+
 contextBridge.exposeInMainWorld('statsAPI', {
   getAllSessions(): Promise<{ timestamp: number; cwd?: string; inputTokens: number; outputTokens: number; messagesCount: number; filesChanged: number; toolCalls: number; durationMs: number }[]> {
     return ipcRenderer.invoke('stats:getAllSessions');

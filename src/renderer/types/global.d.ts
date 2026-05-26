@@ -1,3 +1,4 @@
+import type { SubagentSummary, SubagentInfo, SubagentCapabilities } from '../../shared/subagent-types';
 import type { SessionStats, LifetimeStats, Achievement, SessionEvent, SessionEventLog, LevelProgressData } from '../../main/stats-service';
 import type { GitHubUser, AuthSource } from '../../main/auth-service';
 import type { ConnectionProfile } from '../../main/profile-service';
@@ -214,6 +215,15 @@ interface ServerAPI {
   getInfo(): Promise<{ enabled: boolean; port: number; state: string; externalSessionCount: number }>;
 }
 
+interface SubagentAPI {
+  list(panelId: string): Promise<SubagentSummary[]>;
+  read(panelId: string, agentId: string): Promise<SubagentInfo | null>;
+  write(panelId: string, agentId: string, message: string): Promise<{ success: boolean; error?: string }>;
+  cancel(panelId: string, agentId: string): Promise<{ success: boolean; error?: string }>;
+  capabilities(panelId?: string): Promise<SubagentCapabilities>;
+  onChanged(callback: () => void, panelId: string): () => void;
+}
+
 declare global {
   type ModelInfoData = { id: string; name: string; contextWindow: number; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string };
 
@@ -237,6 +247,7 @@ declare global {
     windowAPI: WindowAPI;
     schedulerAPI: SchedulerAPI;
     serverAPI: ServerAPI;
+    subagentAPI: SubagentAPI;
   }
 }
 

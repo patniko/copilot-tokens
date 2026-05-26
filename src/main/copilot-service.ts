@@ -6,6 +6,7 @@ import { execSync } from 'child_process';
 import Store from 'electron-store';
 import { getPersistedOAuthToken, getActiveSource } from './auth-service';
 import { getActiveProfile, getActiveProfileId, getProfile, type ConnectionProfile, type ProfileConnection } from './profile-service';
+import { SubagentTracker } from './subagent-service';
 
 // Dynamic import to load ESM SDK in Electron's CJS main process
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -68,9 +69,9 @@ export type CopilotEvent =
   | { type: 'tool.progress'; toolCallId: string; message: string }
   | { type: 'tool.partial'; toolCallId: string; output: string }
   | { type: 'tool.complete'; toolCallId: string; success: boolean; result?: string; error?: string }
-  | { type: 'subagent.started'; toolCallId: string; name: string; displayName: string; description: string }
-  | { type: 'subagent.completed'; toolCallId: string; name: string }
-  | { type: 'subagent.failed'; toolCallId: string; name: string; error: string }
+  | { type: 'subagent.started'; toolCallId: string; name: string; displayName: string; description: string; agentId?: string }
+  | { type: 'subagent.completed'; toolCallId: string; name: string; agentId?: string; durationMs?: number; model?: string; totalTokens?: number; totalToolCalls?: number }
+  | { type: 'subagent.failed'; toolCallId: string; name: string; error: string; agentId?: string }
   | { type: 'session.usage_info'; currentTokens: number; tokenLimit: number }
   | { type: 'session.idle' }
   | { type: 'session.error'; errorType: string; message: string; statusCode?: number }
@@ -422,6 +423,11 @@ export class CopilotService {
 
   // Celebrate handler: fires when an agent wants to trigger a celebration overlay
   private celebrateCallback: ((data: { message: string; emoji: string; effect: string; sound: string }) => void) | null = null;
+
+  // Sub-agent tracker — single source of truth for all sub-agent state
+  readonly subagentTracker = new SubagentTracker();
+  // Per-session long-lived unsubscribers for sub-agent event tracking
+  private sessionSubagentUnsubs = new Map<string, () => void>();
 
   private constructor() {}
 
@@ -978,6 +984,7 @@ export class CopilotService {
         streaming: true,
         excludedTools: allExcluded,
         mcpServers: loadMCPServers(),
+        includeSubAgentStreamingEvents: true,
       };
 
       // Provider config from BYOK profiles (session-level — enables per-panel providers)
@@ -1191,12 +1198,108 @@ export class CopilotService {
       session = await this.client!.createSession(opts as unknown as Parameters<CopilotClientType['createSession']>[0]);
       this.sessions.set(panelId, session);
       this.ownSessionIds.add(session.sessionId);
+      this.installSubagentSubscription(panelId, session);
     }
     return session;
   }
 
+  /** Install a long-lived session subscription that feeds the SubagentTracker.
+   *  This persists beyond individual sendMessage turns so agents that outlive
+   *  the parent turn are still tracked. */
+  private installSubagentSubscription(panelId: string, session: CopilotSessionType): void {
+    // Clean up any existing subscription
+    this.sessionSubagentUnsubs.get(panelId)?.();
+
+    const unsub = session.on((event: { type: string; agentId?: string; data?: unknown }) => {
+      const agentId = event.agentId;
+      const data = (event.data ?? {}) as Record<string, unknown>;
+
+      switch (event.type) {
+        case 'subagent.started':
+          this.subagentTracker.trackStarted(panelId, {
+            agentId: agentId,
+            toolCallId: String(data.toolCallId ?? ''),
+            agentName: String(data.agentName ?? ''),
+            agentDisplayName: String(data.agentDisplayName ?? data.agentName ?? ''),
+            agentDescription: String(data.agentDescription ?? ''),
+          });
+          break;
+        case 'subagent.completed':
+          this.subagentTracker.trackCompleted(panelId, {
+            agentId: agentId,
+            toolCallId: String(data.toolCallId ?? ''),
+            agentDisplayName: data.agentDisplayName ? String(data.agentDisplayName) : undefined,
+            durationMs: data.durationMs as number | undefined,
+            model: data.model as string | undefined,
+            totalTokens: data.totalTokens as number | undefined,
+            totalToolCalls: data.totalToolCalls as number | undefined,
+          });
+          break;
+        case 'subagent.failed':
+          this.subagentTracker.trackFailed(panelId, {
+            agentId: agentId,
+            toolCallId: String(data.toolCallId ?? ''),
+            error: String(data.error ?? 'Unknown error'),
+            durationMs: data.durationMs as number | undefined,
+            model: data.model as string | undefined,
+            totalTokens: data.totalTokens as number | undefined,
+            totalToolCalls: data.totalToolCalls as number | undefined,
+          });
+          break;
+        default:
+          // Sub-agent streaming events are tagged with agentId
+          if (!agentId) break;
+          switch (event.type) {
+            case 'assistant.message_delta':
+              this.subagentTracker.trackStreamingDelta(panelId, agentId, String(data.deltaContent ?? ''));
+              break;
+            case 'assistant.intent':
+              this.subagentTracker.trackIntent(panelId, agentId, String(data.intent ?? ''));
+              break;
+            case 'assistant.turn_start':
+              this.subagentTracker.trackTurnStart(panelId, agentId);
+              break;
+            case 'tool.execution_start':
+              this.subagentTracker.trackToolStart(panelId, agentId, {
+                toolCallId: String(data.toolCallId ?? ''),
+                toolName: String(data.toolName ?? ''),
+                args: (data.arguments ?? data.toolArgs ?? {}) as Record<string, unknown>,
+              });
+              break;
+            case 'tool.execution_complete':
+              this.subagentTracker.trackToolComplete(panelId, agentId, {
+                toolCallId: String(data.toolCallId ?? ''),
+                success: Boolean(data.success ?? true),
+                result: (data.result as { content?: string })?.content,
+                error: (data.error as { message?: string })?.message,
+              });
+              break;
+            case 'assistant.usage':
+              this.subagentTracker.trackUsage(
+                panelId,
+                agentId,
+                Number(data.inputTokens ?? 0),
+                Number(data.outputTokens ?? 0),
+              );
+              if (data.model) this.subagentTracker.trackModel(panelId, agentId, String(data.model));
+              break;
+            case 'session.idle':
+              this.subagentTracker.trackIdle(panelId, agentId);
+              break;
+          }
+          break;
+      }
+    });
+    this.sessionSubagentUnsubs.set(panelId, unsub);
+  }
+
   /** Destroy and remove a specific panel session */
   async destroySession(panelId: string): Promise<void> {
+    // Clean up sub-agent subscription and tracked state
+    this.sessionSubagentUnsubs.get(panelId)?.();
+    this.sessionSubagentUnsubs.delete(panelId);
+    this.subagentTracker.clearPanel(panelId);
+
     const session = this.sessions.get(panelId);
     if (session) {
       await session.disconnect().catch(() => {});
@@ -1218,11 +1321,17 @@ export class CopilotService {
     return names;
   }
 
+  /** Get an existing session for a panel (does not create one). Used by IPC for RPC calls. */
+  getSession(panelId: string): CopilotSessionType | undefined {
+    return this.sessions.get(panelId);
+  }
+
   /** Build the common options used when resuming a session. */
   private buildResumeOpts(panelId?: string): Record<string, unknown> {
     const opts: Record<string, unknown> = {
       model: this.model,
       streaming: true,
+      includeSubAgentStreamingEvents: true,
     };
     const cwd = (panelId && this.panelCwds.get(panelId)) || this.workingDirectory;
     if (cwd) opts.workingDirectory = cwd;
@@ -1427,25 +1536,32 @@ export class CopilotService {
               name: data.agentName ?? data.name ?? '',
               displayName: data.agentDisplayName ?? data.displayName ?? data.agentName ?? data.name ?? '',
               description: data.agentDescription ?? data.description ?? '',
+              agentId: event.agentId,
             });
             break;
           }
           case 'subagent.completed': {
-            const data = event.data as { toolCallId?: string; agentName?: string; name?: string };
+            const data = event.data as { toolCallId?: string; agentName?: string; name?: string; agentDisplayName?: string; durationMs?: number; model?: string; totalTokens?: number; totalToolCalls?: number };
             onEvent({
               type: 'subagent.completed',
               toolCallId: data.toolCallId ?? '',
               name: data.agentName ?? data.name ?? '',
+              agentId: event.agentId,
+              durationMs: data.durationMs,
+              model: data.model,
+              totalTokens: data.totalTokens,
+              totalToolCalls: data.totalToolCalls,
             });
             break;
           }
           case 'subagent.failed': {
-            const data = event.data as { toolCallId?: string; agentName?: string; name?: string; error?: string };
+            const data = event.data as { toolCallId?: string; agentName?: string; name?: string; error?: string; durationMs?: number; model?: string; totalTokens?: number; totalToolCalls?: number };
             onEvent({
               type: 'subagent.failed',
               toolCallId: data.toolCallId ?? '',
               name: data.agentName ?? data.name ?? '',
               error: data.error ?? 'Unknown error',
+              agentId: event.agentId,
             });
             break;
           }
