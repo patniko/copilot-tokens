@@ -1020,11 +1020,11 @@ export class CopilotService {
         opts.onPermissionRequest = async (request: Record<string, unknown>) => {
           const decision = await cb(request);
           return {
-            kind: decision === 'deny' ? 'denied-interactively-by-user' : 'approved',
+            kind: decision === 'deny' ? 'denied-interactively-by-user' : 'approve-once',
           };
         };
       } else {
-        opts.onPermissionRequest = async () => ({ kind: 'approved' });
+        opts.onPermissionRequest = async () => ({ kind: 'approve-once' });
       }
       // Ask User handler
       if (features.askUser && this.userInputCallback) {
@@ -1342,10 +1342,10 @@ export class CopilotService {
       const cb = this.permissionCallback;
       opts.onPermissionRequest = async (request: Record<string, unknown>) => {
         const decision = await cb(request);
-        return { kind: decision === 'deny' ? 'denied-interactively-by-user' : 'approved' };
+        return { kind: decision === 'deny' ? 'denied-interactively-by-user' : 'approve-once' };
       };
     } else {
-      opts.onPermissionRequest = async () => ({ kind: 'approved' });
+      opts.onPermissionRequest = async () => ({ kind: 'approve-once' });
     }
     if (this.userInputCallback) {
       opts.onUserInputRequest = this.userInputCallback;
